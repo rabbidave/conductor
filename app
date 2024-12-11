@@ -269,6 +269,9 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
             # Append the copy/paste footer to the output
             output += "\n\n---\nHave fun y'all! 🤠🪄🤖\n"
+            
+            # Add the code to the versions dictionary
+            self.versions.add_code_version(code)
 
             return output
         except Exception as e:
@@ -334,24 +337,21 @@ assert add(-1, 1) == 0, "Should handle negatives"
             )
 
             if stream:
-                try:
-                    for chunk in chat_completion:
-                        content = None
-
-                        if hasattr(chunk.choices[0], 'delta'):
-                            content = getattr(chunk.choices[0].delta, 'content', None)
+                for chunk in chat_completion:
+                    if hasattr(chunk, 'choices') and chunk.choices:
+                        if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta and hasattr(chunk.choices[0].delta, 'content'):
+                            content = chunk.choices[0].delta.content
                         elif hasattr(chunk.choices[0], 'text'):
                             content = chunk.choices[0].text
-                        elif hasattr(chunk.choices[0], 'message'):
-                            content = chunk.choices[0].message.content
-
-                        if content:
-                            yield content
-
-                except Exception as e:
-                    error_msg = f"Error in stream: {str(e)}"
-                    logger.error(error_msg)
-                    yield f"Error: {error_msg}"
+                        else:
+                            # If there's no content, yield an empty string to maintain streaming
+                            content = ""
+                    else:
+                        # If there's no choices, yield an empty string to maintain streaming
+                        content = ""
+                    
+                    if content is not None:
+                        yield content
             else:
                 return chat_completion.choices[0].message.content.strip()
 
@@ -370,7 +370,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
         if not message.strip():
             logger.warning("Empty message received")
-            yield "Please enter a message", "Empty message received"
+            yield "Please enter a message", "Empty message received", self.versions.get_code_versions_html()
             return
 
         try:
@@ -379,25 +379,21 @@ assert add(-1, 1) == 0, "Should handle negatives"
             # Process Model A
             logger.info("Getting Model A response")
             response_a = ""
-
+            
             try:
-                async_response = self.query_llama(self.model_a_id, self.conversation, stream=True)
-                for chunk in async_response:
-                    if isinstance(chunk, str) and chunk.startswith("Error"):
-                        yield chunk, "Error occurred with Model A"
-                        return
+                for chunk in self.query_llama(self.model_a_id, self.conversation, stream=True):
                     response_a += chunk
-                    yield f"Model A Response:\n{response_a}\n\nModel B Response: Waiting...", "Processing Model A response..."
+                    yield f"Model A Response:\n{response_a}\n\nModel B Response: Waiting...", "Processing Model A response...", self.versions.get_code_versions_html()
 
                     if self.should_stop_generation():
                         logger.info("Stopping generation - required test passes achieved")
-                        yield f"Model A Response:\n{response_a}\n\nGeneration stopped: Required test passes achieved", "Complete"
+                        yield f"Model A Response:\n{response_a}\n\nGeneration stopped: Required test passes achieved", "Complete", self.versions.get_code_versions_html()
                         return
 
             except Exception as e:
                 error_msg = f"Error getting Model A response: {str(e)}"
                 logger.error(error_msg)
-                yield error_msg, "Error with Model A"
+                yield error_msg, "Error with Model A", self.versions.get_code_versions_html()
                 return
 
             self.conversation.append({"role": "assistant", "name": self.model_a_id, "content": response_a})
@@ -419,35 +415,34 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
                     code_response = f"Code block {i} output:\n{output}"
                     self.conversation.append({"role": "assistant", "name": self.model_a_id, "content": code_response})
-                    yield f"Model A Response:\n{response_a}\n\nCode Output:\n{output}\n\nModel B Response: Waiting...", f"Executed code block {i} from Model A"
+                    yield f"Model A Response:\n{response_a}\n\nCode Output:\n{output}\n\nModel B Response: Waiting...", f"Executed code block {i} from Model A", self.versions.get_code_versions_html()
 
                     if self.should_stop_generation():
                         logger.info("Stopping generation - required test passes achieved")
-                        yield f"Model A Response:\n{response_a}\n\nGeneration stopped: Required test passes achieved", "Complete"
+                        yield f"Model A Response:\n{response_a}\n\nGeneration stopped: Required test passes achieved", "Complete", self.versions.get_code_versions_html()
                         return
 
+            # Handoff to Model B
+            print("\n--- Handoff to Model B ---")
+            print(f"Conversation so far:\n{self.get_conversation_history()}")
             # Process Model B if needed
             if not self.should_stop_generation():
                 logger.info("Getting Model B response")
                 response_b = ""
                 try:
-                    async_response = self.query_llama(self.model_b_id, self.conversation, stream=True)
-                    for chunk in async_response:
-                        if isinstance(chunk, str) and chunk.startswith("Error"):
-                            yield f"Model A Response:\n{response_a}\n\nModel B Response: Error occurred", "Error occurred with Model B"
-                            return
+                    for chunk in self.query_llama(self.model_b_id, self.conversation, stream=True):
                         response_b += chunk
-                        yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}", "Processing Model B response..."
+                        yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}", "Processing Model B response...", self.versions.get_code_versions_html()
 
                         if self.should_stop_generation():
                             logger.info("Stopping generation - required test passes achieved")
-                            yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}\n\nGeneration stopped: Required test passes achieved", "Complete"
+                            yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}\n\nGeneration stopped: Required test passes achieved", "Complete", self.versions.get_code_versions_html()
                             return
 
                 except Exception as e:
                     error_msg = f"Error getting Model B response: {str(e)}"
                     logger.error(error_msg)
-                    yield f"Model A Response:\n{response_a}\n\nModel B Response: Error: {error_msg}", "Error with Model B"
+                    yield f"Model A Response:\n{response_a}\n\nModel B Response: Error: {error_msg}", "Error with Model B", self.versions.get_code_versions_html()
                     return
 
                 self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": response_b})
@@ -457,7 +452,9 @@ assert add(-1, 1) == 0, "Should handle negatives"
                 test_blocks = re.findall(r'TEST-ASSERT\n```python\n(.*?)\n```', response_b, re.DOTALL)
 
                 if code_blocks:
+                    logger.info(f"Found {len(code_blocks)} code block(s) in Model B response")
                     for i, code in enumerate(code_blocks, 1):
+                        logger.info(f"Executing code block {i}")
                         output = self.run_code(code.strip())
 
                         if i <= len(test_blocks):
@@ -466,19 +463,19 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
                         code_response = f"Code block {i} output:\n{output}"
                         self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": code_response})
-                        yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}\n\nCode Output:\n{output}", f"Executed code block {i} from Model B"
+                        yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}\n\nCode Output:\n{output}", f"Executed code block {i} from Model B", self.versions.get_code_versions_html()
 
                         if self.should_stop_generation():
                             logger.info("Stopping generation - required test passes achieved")
-                            yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}\n\nGeneration stopped: Required test passes achieved", "Complete"
+                            yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}\n\nGeneration stopped: Required test passes achieved", "Complete", self.versions.get_code_versions_html()
                             return
 
-                yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}", "Completed"
+                yield f"Model A Response:\n{response_a}\n\nModel B Response:\n{response_b}", "Completed", self.versions.get_code_versions_html()
 
         except Exception as e:
             error_msg = f"Error processing message: {str(e)}"
             logger.error(error_msg)
-            yield error_msg
+            yield error_msg, "Error occurred", self.versions.get_code_versions_html()
 
     def get_conversation_history(self):
         """Get formatted conversation history."""
@@ -516,7 +513,7 @@ def create_ui():
         manager = LLMManager(versions)
 
         with gr.Blocks(title="LLM Pattern Interface") as interface:
-            gr.Markdown("# 🚂🤖🪄 Conductor")
+            gr.Markdown("# LLM Pattern Interface")
             gr.Markdown("Enter your message to interact with the AI models. Code will be executed and tested until pass criteria are met.")
 
             with gr.Row():
@@ -558,24 +555,20 @@ def create_ui():
             def handle_submit(message):
                 """Handle message submission with streaming."""
                 if not message:
-                    return "", "Please enter a message"
+                    return "", "Please enter a message", ""
 
                 try:
                     logger.info(f"Handling new message: {message[:50]}...")
                     manager.should_stop = False
 
-                    message_generator = manager.process_message(message)
-
-                    for result in message_generator:
+                    for result in manager.process_message(message):
                         if isinstance(result, tuple):
-                            yield result[0], result[1], versions.get_code_versions_html()
+                            yield result[0], result[1], result[2]
                         else:
                             yield result, "Processing...", versions.get_code_versions_html()
-
                 except Exception as e:
-                    error_msg = f"Error processing message: {str(e)}"
-                    logger.error(error_msg)
-                    yield "", error_msg, versions.get_code_versions_html()
+                    logger.error(f"Error processing message: {e}")
+                    yield "", f"Error: {e}", versions.get_code_versions_html()
 
             def handle_stop():
                 """Handle stop button click."""
@@ -663,7 +656,7 @@ def main():
         interface.launch(
             share=False,
             server_name="0.0.0.0",
-            server_port=4321,
+            server_port=1337  ,
             debug=True
         )
 
