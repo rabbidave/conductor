@@ -38,14 +38,7 @@ Conductor is an interactive interface that (locally) orchestrates multiple (remo
     .venv\Scripts\activate  # On Windows
     ```
 
-3.  **Create the requirements.txt file:**
-     * Create a file named `requirements.txt` and add the following to the file:
-
-    ```
-    gradio
-    openai
-    ```
-4. **Install Dependencies:**
+3. **Install Dependencies:**
 
     ```bash
     pip install -r requirements.txt
@@ -102,7 +95,7 @@ Conductor is an interactive interface that (locally) orchestrates multiple (remo
         """
         }
         ```
-    *  You might add examples of how to modity the message to tailor the response to your specific needs.
+    
 4.  **Test Pass Count:**
 
     *   To change the number of successful test passes required to stop generation, modify `self.max_passed_tests` in `LLMManager.__init__` in the main python file.
