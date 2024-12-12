@@ -2,38 +2,31 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Conductor is an interactive interface that (locally) orchestrates multiple (remote or local) Language Models with Python code execution and test assertion capabilities. 
+Conductor is an interactive interface that (locally) orchestrates multiple (remote or local) Language Models with Python code execution and test assertion capabilities.
 
-It features a dedicated code versioning system that displays a scrollable view of generated and tested code, along with Aider-style Git diffs (or basic line-by-line diffs if Git is unavailable) to track code changes.
 
 ## Features
 
-*   **Dual LLM Interaction:** Engage with multiple LMs sequentially for mob-style programming.
-*   **Safe Code Execution:** Run Python Code within a sandboxed environment via allowed/restricted operations.
+*   **Multi LM Interaction:** Engage with multiple LMs sequentially for mob-style programming.
+*   **Safe Code Execution:** Run Python Code within a sandboxed environment via allowed/restricted operations. Code execution is restricted by a regex check for potentially unsafe operations, and this can be customized in the main python file.
 *   **Automated Test Assertions:** Define test cases using `TEST-ASSERT` blocks; Conductor will automatically run them against the executed code.
 *   **Test-Driven Generation:** Generation stops after a configurable number of successful test passes, encouraging test-driven development.
-*   **Code Versioning:**  Tested code is stored and displayed in a scrollable HTML view within the UI, providing a clear history of generated code.
-*   **Aider-style Git Diffs:** Track code changes with Git diffs (or a basic line-by-line diff if not in a Git repository), making it easy to review and integrate code into your projects. (Note: Diffs are displayed temporarily during code execution).
-*   **Real-time Streaming:** Responses from the LLMs are streamed in real-time to the user interface.
-*   **Conversation History:** View the entire conversation history with the LMs.
-*   **Status and Error Display:** Clear status updates and error messages guide you through the interaction.
 *   **Customizable System Message:** Tailor the behavior of the LMs by modifying the system message.
 *   **Configurable Model IDs:** Easily switch between different local LLMs by updating the model IDs.
-*   **Gradio-powered UI:** A user-friendly web interface powered by Gradio.
-*   **Enhanced Copy-Paste:** Executed code blocks in the UI are appended with a footer, making it easier to copy and paste the generated code.
+*  **Configurable API/Model**: You can use an `.env` file in order to specify the local API url and the local model id to use. This file will be automatically created with default values the first time you run the project.
+
 
 ## Prerequisites
 
 *   **Python 3.7+:** Ensure you have Python 3.7 or a newer version installed.
 *   **LM Studio (or similar):** A local LLM server like LM Studio is required. You can download it from [LM Studio's website](https://lmstudio.ai/).
-*   **Git (optional):** For the best diff tracking experience, Git should be installed and the project should be within a Git repository. If Git is not available, a basic line-by-line diff will be used.
 
 ## Installation
 
 1. **Clone the Repository:**
 
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/rabbidave/conductor
     cd conductor
     ```
 
@@ -45,34 +38,40 @@ It features a dedicated code versioning system that displays a scrollable view o
     .venv\Scripts\activate  # On Windows
     ```
 
-3. **Install Dependencies:**
+3.  **Create the requirements.txt file:**
+     * Create a file named `requirements.txt` and add the following to the file:
+
+    ```
+    gradio
+    openai
+    ```
+4. **Install Dependencies:**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-    This will install `gradio`, `openai`, and `GitPython`.
+    This will install `gradio`, and `openai`.
 
 ## Configuration
 
-1. **LM Studio Setup:**
+1.  **LM Studio Setup:**
 
     *   Launch LM Studio.
     *   Download and load the models you want to use (e.g., `exaone-3.5-32b-instruct@q4_k_m` and `qwq-32b-preview`).
     *   Start the local server in LM Studio (default: `http://localhost:1234`).
 
-2. **Model IDs:**
+2.  **Model IDs:**
+    * On the first use of the project, the system will automatically create an `.env` file with the default values. You can modify this file to change the local server url and model ids.
+    *   Locate the `.env` file in the project root folder.
+    *   Update the model ids `MODEL_A_ID` and `MODEL_B_ID` variables with the correct model IDs from LM Studio.
 
-    *   Open `gradio-llm-interface.py` in a text editor.
-    *   Locate the `LLMManager.__init__` method.
-    *   Update the `self.model_a_id` and `self.model_b_id` variables with the correct model IDs from LM Studio.
-
-    ```python
-    self.model_a_id = "your-model-a-id"  # e.g., "exaone-3.5-32b-instruct@q4_k_m"
-    self.model_b_id = "your-model-b-id"  # e.g., "qwq-32b-preview"
     ```
-
-3. **System Message (Optional):**
+    MODEL_A_ID="your-model-a-id"  # e.g., "exaone-3.5-32b-instruct@q4_k_m"
+    MODEL_B_ID="your-model-b-id"  # e.g., "qwq-32b-preview"
+     LOCAL_API_URL="http://localhost:1234/v1/"
+    ```
+3.  **System Message (Optional):**
 
     *   In `LLMManager.__init__`, you can customize the `self.system_message` to modify the behavior of the LLMs. This message sets the context for the conversation and defines the `RUN-CODE` and `TEST-ASSERT` block formats.
 
@@ -99,18 +98,18 @@ It features a dedicated code versioning system that displays a scrollable view o
     - Tests have access to variables from code execution
     - Generation stops after 2 successful test passes
 
-    ... (rest of the system message)
-    """
-    }
-    ```
+        ... (rest of the system message)
+        """
+        }
+        ```
+    *  You might add examples of how to modity the message to tailor the response to your specific needs.
+4.  **Test Pass Count:**
 
-4. **Test Pass Count:**
+    *   To change the number of successful test passes required to stop generation, modify `self.max_passed_tests` in `LLMManager.__init__` in the main python file.
 
-    *   To change the number of successful test passes required to stop generation, modify `self.max_passed_tests` in `LLMManager.__init__`.
+5.  **Logging:**
 
-5. **Logging:**
-
-    *   Logs are stored in the `logs/` directory; [Observers coming soon](https://github.com/cfahlgren1/observers)
+    *   Logs are stored in the `logs/` directory.
     *   Adjust the logging level in `gradio-llm-interface.py` using:
 
     ```python
@@ -118,20 +117,24 @@ It features a dedicated code versioning system that displays a scrollable view o
     # or
     logging.basicConfig(level=logging.INFO)   # For less verbose logging
     ```
+    *   Debug level logging can be enabled to provide very detailed output on the behaviour of the code.
+
+6. **Security Note**
+ * Always use caution with code generated by an LLM and do not execute code from untrusted sources.
 
 ## Usage
 
 1. **Start the Interface:**
 
     ```bash
-    python gradio-llm-interface.py
+    python app.py
     ```
 
 2. **Access the UI:**
 
-    *   Open your web browser and go to `http://localhost:1337` (or the address indicated in the terminal).
+    *   Open your web browser and go to `http://localhost:31337` (or the address indicated in the terminal).
 
-3. **Interact with the LLMs:**
+3. **Interact with the LMs:**
 
     *   Enter your prompt in the "Input Message" textbox.
     *   Click "Submit" to send the message to Model A.
@@ -141,18 +144,6 @@ It features a dedicated code versioning system that displays a scrollable view o
     *   Click "Stop Generation" to manually stop the generation process.
     *   Click "Clear Conversation" to start a new conversation.
 
-4. **View Code Versions:**
-
-    *   After code has been executed and tests have passed, click the "Show Code Versions" button to view a scrollable HTML display of the generated code in the "Generated Code Versions" section.
-    *   Click "Clear Versions" to clear the code version history.
-
-5. **Copy/Paste Generated Code:**
-    *   Executed code blocks will have the following footer in the UI, making it easier to copy the code:
-
-    ```
-    ---
-    Have fun y'all! 🤠🪄🤖
-    ```
 
 ## Example Workflow
 
@@ -199,37 +190,12 @@ It features a dedicated code versioning system that displays a scrollable view o
         Have fun y'all! 🤠🪄🤖
         ```
 
-    *   If tests pass, the code will be added to the code versions.
-
-4. **Show Code Versions:**
-    *   Clicking "Show Code Versions" will display the code in the "Generated Code Versions" section:
-
-    ```html
-    <p><b>Version: 2023-10-27 10:30:00</b></p>
-    <pre><code>def fibonacci_recursive(n):
-        if n <= 0:
-            return 0
-        elif n == 1:
-            return 1
-        else:
-            return fibonacci_recursive(n-1) + fibonacci_recursive(n-2)
-    </code></pre>
-    <hr>
-    <p><b>Version: 2023-10-27 10:30:15</b></p>
-    <pre><code>assert fibonacci_recursive(0) == 0, "fibonacci_recursive(0) should be 0"
-    assert fibonacci_recursive(1) == 1, "fibonacci_recursive(1) should be 1"
-    assert fibonacci_recursive(5) == 5, "fibonacci_recursive(5) should be 5"
-    assert fibonacci_recursive(10) == 55, "fibonacci_recursive(10) should be 55"
-    </code></pre>
-    <hr>
-    ```
-
 ## Troubleshooting
 
 *   **Package Installation Errors:** If you encounter errors during package installation, ensure your virtual environment is activated, and you have the necessary permissions to install packages.
-*   **LM Studio Connection Issues:** Verify that LM Studio is running and the local server is started. Check the port number (default: 1234) and make sure it matches the `base_url` in `LLMManager.__init__`.
-*   **Model Not Found:** Double-check that the model IDs you've configured in `LLMManager.__init__` are correct and that the models are loaded in LM Studio.
-*   **Git Errors:** If you get errors related to Git, make sure Git is installed and that the project is inside a Git repository. If you don't want to use Git, the code will fall back to a basic line-by-line diff.
+*   **LM Studio Connection Issues:** Verify that LM Studio is running and the local server is started. Check the port number (default: 1234) and make sure it matches the `base_url` in `LLMManager.__init__` or in the `.env` file.
+*   **Model Not Found:** Double-check that the model IDs you've configured in  the `.env` file are correct and that the models are loaded in LM Studio.
+*   **Git Errors:** If you get errors related to Git, make sure Git is installed and that the project is inside a Git repository. If you don't want to use Git, the code will fall back to skipping diff generation.
 
 ## License
 
@@ -237,31 +203,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Contributions are welcome! Please feel free to open issues or submit pull requests on the project's repository page.
-content_copy
-Use code with caution.
-Markdown
+Contributions are welcome!  Please adhere to the following guidelines:
 
-Key Changes:
+*   **Bug Reports:** Submit detailed bug reports including the steps to reproduce and any relevant error messages.
+*   **Feature Requests:** Suggest new features, enhancements, or improvements in an issue.
+*   **Pull Requests:** When submitting pull requests, make sure that your code aligns with the project's style and standards. Add tests where necessary and make sure all tests pass before submitting.
 
-Code Versioning: Added a section explaining the new code versioning feature and how to use the "Show Code Versions" and "Clear Versions" buttons.
-
-Updated Example Workflow: Modified the example to demonstrate the code versioning feature and how the code appears in the "Generated Code Versions" section.
-
-Minor Refinements: Improved the overall clarity and flow of the README.
-
-Remember to:
-
-Create a LICENSE file (with the MIT License content) in your repository.
-
-Create a requirements.txt file with the following content:
-
-gradio
-openai
-GitPython
-content_copy
-Use code with caution.
-
-Replace <repository_url> with the actual URL of your repository.
-
-This comprehensive README.md should be very helpful for users of your improved Conductor project! Let me know if you have any more questions.
+Please feel free to open issues or submit pull requests on the project's repository page.
