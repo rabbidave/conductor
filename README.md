@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Conductor is a(n GU/AP) interface that (locally) orchestrates multiple (remote and/or local) Language Models
+Conductor is a deployable interface (GUI/API) that (locally) orchestrates multiple (remote and/or local) Language Models
 
 Python code is executed and tested against assertions; via configurable allow/block list of operations.
 
