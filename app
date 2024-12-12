@@ -14,6 +14,8 @@ from datetime import datetime
 from git import Repo, InvalidGitRepositoryError
 import html
 import json
+import requests
+from urllib.parse import urlparse
 
 try:
     from openai import OpenAI
@@ -117,6 +119,200 @@ class ExecutionManager:
         else:
             return "<p>No output yet.</p>"
 
+class SecurityManager:
+    def __init__(self):
+        # Patterns that are always blocked
+        self.blocked_patterns = [
+            r"rm\s+-rf\s+/",  # More specific pattern for rm -rf /
+            r"system\s*\(",    # system calls
+            r"(?<!@)eval\s*\(",  # eval() but allow @eval decorators
+            r"(?<!controlled_)exec\s*\(",  # exec() but allow controlled_exec
+            r"subprocess\.",   # subprocess module
+            r"pty\.",         # pty module
+            r"__import__\s*\(",  # dynamic imports
+            r"globals\s*\(\s*\)",  # accessing globals
+            r"locals\s*\(\s*\)",   # accessing locals
+            r"breakpoint\s*\(\s*\)",  # debugger
+            r"input\s*\("      # raw input
+        ]
+        
+        # Patterns that require extra validation
+        self.restricted_patterns = {
+            r"requests\.": self._validate_requests,
+            r"urlopen\s*\(": self._validate_url,
+            r"open\s*\(": self._validate_file_access,
+            r"Path\s*\(": self._validate_path
+        }
+        
+        # Allowed domains for web requests
+        self.allowed_domains = {
+            'api.github.com',
+            'raw.githubusercontent.com',
+            'api.openai.com',
+            'api.serpapi.com',
+            'arxiv.org',
+            'scholar.google.com',
+            # Add more trusted domains as needed
+        }
+        
+        # Allowed file extensions for reading
+        self.allowed_extensions = {
+            '.txt', '.csv', '.json', '.yaml', '.yml', 
+            '.md', '.py', '.js', '.html', '.css'
+        }
+        
+        # Initialize safe execution environment
+        self.safe_globals = {
+            # Built-in functions
+            'print': print,
+            'len': len,
+            'range': range,
+            'str': str,
+            'int': int,
+            'float': float,
+            'bool': bool,
+            'list': list,
+            'dict': dict,
+            'set': set,
+            'tuple': tuple,
+            'sum': sum,
+            'min': min,
+            'max': max,
+            'enumerate': enumerate,
+            'zip': zip,
+            'round': round,
+            'abs': abs,
+            'all': all,
+            'any': any,
+            'sorted': sorted,
+            'filter': filter,
+            'map': map,
+            
+            # Controlled versions of dangerous operations
+            'controlled_exec': self.controlled_exec,
+            
+            # Safe modules
+            'os': self._create_safe_os(),
+            'Path': Path,
+            'requests': self._create_safe_requests(),
+            
+            # Math operations
+            'math': __import__('math'),
+            'statistics': __import__('statistics'),
+            'random': __import__('random'),
+            
+            # Data processing
+            'json': __import__('json'),
+            'csv': __import__('csv'),
+            're': __import__('re'),
+            'datetime': __import__('datetime'),
+            'itertools': __import__('itertools'),
+            'collections': __import__('collections'),
+        }
+
+    def _create_safe_requests(self):
+        """Create a restricted requests module with only GET methods to allowed domains"""
+        class SafeRequests:
+            def __init__(self, allowed_domains):
+                self.allowed_domains = allowed_domains
+                self.session = requests.Session()
+                
+            def get(self, url, **kwargs):
+                domain = urlparse(url).netloc
+                if domain not in self.allowed_domains:
+                    raise SecurityError(f"Access to domain {domain} is not allowed")
+                return self.session.get(url, **kwargs)
+                
+        return SafeRequests(self.allowed_domains)
+
+    def _create_safe_os(self):
+        """Create a restricted os module with only safe operations"""
+        safe_os = type('SafeOS', (), {})()
+        
+        # Allow only specific os functions
+        safe_functions = [
+            'getcwd', 'listdir', 'path.exists', 'path.isfile', 
+            'path.isdir', 'path.getsize', 'path.basename',
+            'path.dirname', 'path.join', 'path.splitext'
+        ]
+        
+        for func in safe_functions:
+            if '.' in func:
+                module, method = func.split('.')
+                if not hasattr(safe_os, module):
+                    setattr(safe_os, module, type('SafeOSPath', (), {})())
+                setattr(getattr(safe_os, module), method, getattr(os.path, method))
+            else:
+                setattr(safe_os, func, getattr(os, func))
+                
+        return safe_os
+
+    def _validate_requests(self, code_block):
+        """Validate web requests"""
+        # Extract URLs from the code
+        urls = re.findall(r'(?:http[s]?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&\'\(\)\*\+,;=.]+', code_block)
+        
+        for url in urls:
+            domain = urlparse(url).netloc
+            if domain not in self.allowed_domains:
+                raise SecurityError(f"Access to domain {domain} is not allowed")
+        return True
+
+    def _validate_url(self, code_block):
+        """Validate URL operations"""
+        return self._validate_requests(code_block)
+
+    def _validate_file_access(self, code_block):
+        """Validate file operations"""
+        # Extract filenames/paths from the code
+        potential_files = re.findall(r'open\s*\(\s*[\'"]([^\'"]+)[\'"]', code_block)
+        
+        for file_path in potential_files:
+            path = Path(file_path)
+            if not any(str(path).endswith(ext) for ext in self.allowed_extensions):
+                raise SecurityError(f"Access to file type {path.suffix} is not allowed")
+            if not path.is_relative_to(Path.cwd()):
+                raise SecurityError("Access to files outside working directory is not allowed")
+        return True
+
+    def _validate_path(self, code_block):
+        """Validate Path operations"""
+        return self._validate_file_access(code_block)
+
+    def controlled_exec(self, code_str, globals_dict=None, locals_dict=None):
+        """Safe version of exec with restricted scope"""
+        if globals_dict is None:
+            globals_dict = self.safe_globals.copy()
+        return exec(code_str, globals_dict, locals_dict)
+
+    def validate_code(self, code_block):
+        """
+        Validate code block against security rules
+        Returns (is_safe, message)
+        """
+        try:
+            # Check for blocked patterns
+            for pattern in self.blocked_patterns:
+                if re.search(pattern, code_block):
+                    return False, f"Blocked pattern detected: {pattern}"
+
+            # Check restricted patterns
+            for pattern, validator in self.restricted_patterns.items():
+                if re.search(pattern, code_block):
+                    try:
+                        validator(code_block)
+                    except SecurityError as e:
+                        return False, str(e)
+
+            return True, "Code passes security checks"
+
+        except Exception as e:
+            return False, f"Security validation error: {str(e)}"
+
+class SecurityError(Exception):
+    """Custom exception for security violations"""
+    pass
+
 class LLMManager:
     def __init__(self, execution_manager):
         logger.info("Initializing LLMManager...")
@@ -124,7 +320,7 @@ class LLMManager:
         try:
             self.llama_api = OpenAI(
                 api_key="api_key",
-                base_url="http://127.0.0.1:1234/v1/"  # Your local LLM base URL
+                base_url="http://127.0.0.1:1234/v1/"  # Your local/remote LLM base URL
             )
 
             # Track execution context and test passes
@@ -150,11 +346,11 @@ assert condition, "Test message"
 
 Important rules:
 
-Each block must start with its marker on its own line
+Each block must start with its marker on its own line (e.g. \n)
 
-Code must be within triple backticks with 'python' specified
+Run-Code Code must be within triple backticks with 'python' specified
 
-Tests have access to variables from code execution
+Test-Assert Tests have access to variables from code execution
 
 Generation stops after 2 successful test passes
 
@@ -184,50 +380,26 @@ assert add(-1, 1) == 0, "Should handle negatives"
             raise
 
     def run_code(self, code):
-        """Execute code with safety checks and diff tracking."""
+        """Execute code with enhanced safety checks and diff tracking."""
         logger.info("Preparing to execute code block")
         logger.debug(f"Code to execute:\n{code}")
 
-        # Basic safety checks
-        dangerous_patterns = [
-            "rm -rf",
-            "system(",
-            "eval(",
-            "exec(",
-            "input(",
-            "requests.",
-        ]
-
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                error_msg = f"Potentially unsafe code detected: {pattern}"
-                logger.warning(error_msg)
-                return error_msg
+        security_manager = SecurityManager()
+        
+        # Validate code against security rules
+        is_safe, message = security_manager.validate_code(code)
+        if not is_safe:
+            error_msg = f"Security check failed: {message}"
+            logger.warning(error_msg)
+            return error_msg
 
         old_stdout = sys.stdout
         captured_output = StringIO()
         sys.stdout = captured_output
 
         try:
-            # Set up safe execution environment
-            safe_globals = {
-                'print': print,
-                'len': len,
-                'range': range,
-                'str': str,
-                'int': int,
-                'float': float,
-                'bool': bool,
-                'list': list,
-                'dict': dict,
-                'set': set,
-                'os': os,
-                'Path': Path
-            }
-
-            # Execute code and save locals for test access
-            self.last_execution_locals = {}
-            exec(code, safe_globals, self.last_execution_locals)
+            # Execute code with safe globals
+            exec(code, security_manager.safe_globals, {})
             output = captured_output.getvalue()
             logger.info("Code execution successful")
 
@@ -513,8 +685,8 @@ def create_ui():
         execution_manager = ExecutionManager()
         manager = LLMManager(execution_manager)
 
-        with gr.Blocks(title="LLM Pattern Interface") as interface:
-            gr.Markdown("# LLM Pattern Interface")
+        with gr.Blocks(title="🚂🤖🪄 Conductor") as interface:
+            gr.Markdown("# 🚂🤖🪄 Conductor")
             gr.Markdown("Enter your message to interact with the AI models. Code will be executed and tested until pass criteria are met.")
 
             with gr.Row():
@@ -646,7 +818,7 @@ def create_ui():
 
 def main():
     """Main entry point."""
-    logger.info("Starting LLM Interface application")
+    logger.info("🚂🤖🪄 Initializing Conductor ")
 
     try:
         # Ensure we're running in a virtual environment
