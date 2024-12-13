@@ -6,16 +6,17 @@
 
 * Python code is executed and tested against assertions; via configurable allow/block list of operations (regex).
 
-![](https://github.com/rabbidave/conductor/blob/main/envvar.gif?raw=true)
+![](https://github.com/rabbidave/conductor/blob/main/code.gif?raw=true)
 
 ## Features
 
 *   **Multi LM Interaction:** Engage with multiple LMs sequentially for mob-style programming.
 *   **Safe Code Execution:** Run Python Code within a sandboxed environment via allowed/restricted operations.
 *   **Automated Test Assertions:** Define test cases using `TEST-ASSERT` blocks; Conductor runs them automatically.
-*   **Test-Driven Generation:** Generation stops after a configurable number of successful test passes; TDD for AI
+*   **Test-Driven Generation:** Generation stops after a configurable number of successful test passes, encouraging test-driven development.
 *   **Customizable System Message:** Tailor the behavior of the LMs by modifying the system message.
 *   **Configurable Model IDs, API URLs, and Generation Parameters:** Easily switch between different LMs and Generation Settings
+*   **Dynamic Environment Configuration:**  Modify model IDs, API URLs, maximum tokens, temperature, and top-p directly via the UI, or via an `.env` file.
 *   **Detailed Logging:** Comprehensive logs available in the `logs/` directory for debugging.
 
 ## Prerequisites
@@ -218,24 +219,3 @@ Contributions are welcome! Please adhere to the following guidelines:
 *   **Pull Requests:** When submitting pull requests, make sure that your code aligns with the project's style and standards. Add tests where necessary and make sure all tests pass before submitting.
 
 Please feel free to open issues or submit pull requests on the project's repository page.
-content_copy
-Use code with caution.
-Markdown
-
-Key Updates:
-
-Environment Variable Explanation: Clarified the use of the .env file and included all the relevant environment variables for configuration, including the new parameters like MAX_TOKENS, TEMPERATURE and TOP_P.
-
-UI-Based Configuration: Added a section to describe how to configure environment variables within the UI.
-
-Dynamic Configuration: Included a mention of being able to dynamically configure the API/Model URLs and IDs via UI.
-
-Troubleshooting: Added firewall issues to the troubleshooting section.
-
-Terminal Output Troubleshooting: Added a troubleshooting point about terminal output.
-
-UI Elements: Added the ability to show the last code and output
-
-Port update: Updated the default port to 1339.
-
-This revised README.md should provide a much clearer and more comprehensive guide for users of your project.
