@@ -1,5 +1,3 @@
-Okay, here's the updated README.md file incorporating the changes we've made, such as the environment variable updates, UI elements, and troubleshooting:
-
 # 🚂🤖🪄Conductor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,17 +6,16 @@ Okay, here's the updated README.md file incorporating the changes we've made, su
 
 * Python code is executed and tested against assertions; via configurable allow/block list of operations (regex).
 
-![](https://github.com/rabbidave/conductor/blob/main/code.gif?raw=true)
+![](https://github.com/rabbidave/conductor/blob/main/envvar.gif?raw=true)
 
 ## Features
 
 *   **Multi LM Interaction:** Engage with multiple LMs sequentially for mob-style programming.
 *   **Safe Code Execution:** Run Python Code within a sandboxed environment via allowed/restricted operations.
 *   **Automated Test Assertions:** Define test cases using `TEST-ASSERT` blocks; Conductor runs them automatically.
-*   **Test-Driven Generation:** Generation stops after a configurable number of successful test passes, encouraging test-driven development.
+*   **Test-Driven Generation:** Generation stops after a configurable number of successful test passes; TDD for AI
 *   **Customizable System Message:** Tailor the behavior of the LMs by modifying the system message.
-*   **Configurable Model IDs, API URLs, and Generation Parameters:** Easily switch between different local LLMs and adjust generation settings directly via the UI or environment variables.
-*   **Dynamic Environment Configuration:**  Modify model IDs, API URLs, maximum tokens, temperature, and top-p directly via the UI, or via an `.env` file.
+*   **Configurable Model IDs, API URLs, and Generation Parameters:** Easily switch between different LMs and Generation Settings
 *   **Detailed Logging:** Comprehensive logs available in the `logs/` directory for debugging.
 
 ## Prerequisites
