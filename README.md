@@ -6,7 +6,7 @@
 
 * Python code is executed and tested against assertions; via configurable allow/block list of operations (regex).
 
-![](https://github.com/rabbidave/conductor/blob/main/code.gif?raw=true)
+![](https://github.com/rabbidave/conductor/blob/main/envvar.gif?raw=true)
 
 ## Features
 
