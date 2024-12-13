@@ -330,34 +330,25 @@ class LLMManager:
         # Initialize LLM URLs and IDs from environment variables or defaults
         self.model_a_url = model_a_url or os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
         self.model_b_url = model_b_url or os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
-        self.model_a_id = model_a_id or os.getenv("MODEL_A_ID", "qwen2.5-coder-7b-instruct")
-        self.model_b_id = model_b_id or os.getenv("MODEL_B_ID", "qwen2.5-coder-14b-instruct")
+        self.model_a_id = model_a_id or os.getenv("MODEL_A_ID", "phi-4")
+        self.model_b_id = model_b_id or os.getenv("MODEL_B_ID", "phi-4")
 
         self.max_tokens = max_tokens or int(os.getenv("MAX_TOKENS", "2000"))
         self.temperature = temperature or float(os.getenv("TEMPERATURE", "0.7"))
         self.top_p = top_p or float(os.getenv("TOP_P", "0.95"))
 
+        self._update_api_clients()
 
-        try:
-            self.llama_api_a = OpenAI(
-                api_key="api_key",
-                base_url=self.model_a_url
-            )
 
-            self.llama_api_b = OpenAI(
-                api_key="api_key",
-                base_url=self.model_b_url
-            )
+        # Track execution context and test passes
+        self.last_execution_locals = {}
+        self.passed_tests_count = 0
+        self.max_passed_tests = 4  # Increase if needed
 
-            # Track execution context and test passes
-            self.last_execution_locals = {}
-            self.passed_tests_count = 0
-            self.max_passed_tests = 4  # Increase if needed
-
-            # Enhanced system message
-            self.system_message = {
-                "role": "system",
-                "content": """You are an AI assistant with Python code execution capabilities.
+        # Enhanced system message
+        self.system_message = {
+            "role": "system",
+            "content": """You are an AI assistant with Python code execution capabilities.
 
 1. For code execution, use:
 RUN-CODE
@@ -395,14 +386,72 @@ TEST-ASSERT
 assert result == 12, "Addition should work"
 assert add(-1, 1) == 0, "Should handle negatives"
 ```"""
-            }
+        }
 
 
-            self.conversation = [self.system_message]
+        self.conversation = [self.system_message]
 
+    def _update_api_clients(self):
+        """Updates the api clients with the current config"""
+        try:
+            self.llama_api_a = OpenAI(
+                api_key="api_key",
+                base_url=self.model_a_url
+            )
+
+            self.llama_api_b = OpenAI(
+                api_key="api_key",
+                base_url=self.model_b_url
+            )
         except Exception as e:
             logger.error(f"Failed to initialize LLMManager: {e}")
             raise
+            
+    def update_config(self, model_a_url=None, model_b_url=None, model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None):
+        """Updates the config of the LLM Manager"""
+        if model_a_url:
+          self.model_a_url = model_a_url
+        if model_b_url:
+          self.model_b_url = model_b_url
+        if model_a_id:
+          self.model_a_id = model_a_id
+        if model_b_id:
+          self.model_b_id = model_b_id
+        if max_tokens:
+          self.max_tokens = int(max_tokens)
+        if temperature:
+          self.temperature = float(temperature)
+        if top_p:
+          self.top_p = float(top_p)
+
+        self._update_api_clients()
+        logger.info(f"LLM Config updated to: MODEL_A_URL: {self.model_a_url}, MODEL_B_URL: {self.model_b_url}, MODEL_A_ID: {self.model_a_id}, MODEL_B_ID: {self.model_b_id}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
+
+    def run_code(self, code):
+        """Execute code with enhanced safety checks and diff tracking."""
+        logger.info("Preparing to execute code block")
+        logger.debug(f"Code to execute:\n{code}")
+            
+    def update_config(self, model_a_url=None, model_b_url=None, model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None):
+        """Updates the config of the LLM Manager"""
+        if model_a_url:
+          self.model_a_url = model_a_url
+        if model_b_url:
+          self.model_b_url = model_b_url
+        if model_a_id:
+          self.model_a_id = model_a_id
+        if model_b_id:
+          self.model_b_id = model_b_id
+        if max_tokens:
+          self.max_tokens = int(max_tokens)
+        if temperature:
+          self.temperature = float(temperature)
+        if top_p:
+          self.top_p = float(top_p)
+
+        self._update_api_clients()
+        logger.info(f"LLM Config updated to: MODEL_A_URL: {self.model_a_url}, MODEL_B_URL: {self.model_b_url}, MODEL_A_ID: {self.model_a_id}, MODEL_B_ID: {self.model_b_id}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
+
 
     def run_code(self, code):
         """Execute code with enhanced safety checks and diff tracking."""
@@ -717,217 +766,220 @@ assert add(-1, 1) == 0, "Should handle negatives"
             return error_msg
 
 def create_ui():
-    """Create and configure the Gradio interface."""
-    logger.info("Creating Gradio interface")
+ """Create and configure the Gradio interface."""
+ logger.info("Creating Gradio interface")
 
-    try:
-        execution_manager = ExecutionManager()
-        # Initialize LLMManager with potentially updated URLs and IDs
-        model_a_url = os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
-        model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
-        model_a_id = os.getenv("MODEL_A_ID", "qwen2.5-coder-7b-instruct")
-        model_b_id = os.getenv("MODEL_B_ID", "qwen2.5-coder-14b-instruct")
-        max_tokens = os.getenv("MAX_TOKENS", "2000")
-        temperature = os.getenv("TEMPERATURE", "0.7")
-        top_p = os.getenv("TOP_P", "0.95")
+ try:
+     execution_manager = ExecutionManager()
+     # Initialize LLMManager with potentially updated URLs and IDs
+     model_a_url = os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
+     model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
+     model_a_id = os.getenv("MODEL_A_ID", "phi-4")
+     model_b_id = os.getenv("MODEL_B_ID", "phi-4")
+     max_tokens = os.getenv("MAX_TOKENS", "2000")
+     temperature = os.getenv("TEMPERATURE", "0.7")
+     top_p = os.getenv("TOP_P", "0.95")
 
-        manager = LLMManager(execution_manager, 
-                            model_a_url=model_a_url, 
-                            model_b_url=model_b_url,
-                            model_a_id=model_a_id,
-                            model_b_id=model_b_id,
-                            max_tokens=int(max_tokens),
-                            temperature=float(temperature),
-                            top_p=float(top_p))
+     manager = LLMManager(execution_manager, 
+                         model_a_url=model_a_url, 
+                         model_b_url=model_b_url,
+                         model_a_id=model_a_id,
+                         model_b_id=model_b_id,
+                         max_tokens=int(max_tokens),
+                         temperature=float(temperature),
+                         top_p=float(top_p))
 
 
-        with gr.Blocks(title="🚂🤖🪄 Conductor") as interface:
-            gr.Markdown("# 🚂🤖🪄 Conductor")
-            gr.Markdown("Enter your message to interact with the AI models. Code will be executed and tested until pass criteria are met.")
+     with gr.Blocks(title="🚂🤖🪄 Conductor") as interface:
+         gr.Markdown("# 🚂🤖🪄 Conductor")
+         gr.Markdown("Enter your message to interact with the AI models. Code will be executed and tested until pass criteria are met.")
 
-            with gr.Accordion("Environment Variables", open=False):
-               with gr.Row():
-                    model_a_url_input = gr.Textbox(
-                        label="Model A URL",
-                        value=model_a_url,
-                        placeholder="http://127.0.0.1:1234/v1/"
-                    )
-                    model_b_url_input = gr.Textbox(
-                       label="Model B URL",
-                       value=model_b_url,
-                       placeholder="http://127.0.0.1:1235/v1/"
-                    )
-               with gr.Row():
-                    model_a_id_input = gr.Textbox(
-                        label="Model A ID",
-                        value=model_a_id,
-                        placeholder="qwen2.5-coder-7b-instruct"
-                    )
-                    model_b_id_input = gr.Textbox(
-                       label="Model B ID",
-                       value=model_b_id,
-                       placeholder="qwen2.5-coder-14b-instruct"
-                    )
-               with gr.Row():
-                    max_tokens_input = gr.Number(
-                        label="Max Tokens",
-                        value=int(max_tokens),
-                    )
-                    temperature_input = gr.Number(
-                        label="Temperature",
-                        value=float(temperature),
-                    )
-                    top_p_input = gr.Number(
-                        label="Top P",
-                        value=float(top_p),
-                    )
-               update_env_btn = gr.Button("Update Environment Variables")
-
+         with gr.Accordion("Environment Variables", open=False):
             with gr.Row():
-                with gr.Column(scale=2):
-                    input_message = gr.Textbox(
-                        placeholder="Type your message here...",
-                        label="Input Message",
-                        lines=3
-                    )
-
-                    with gr.Row():
-                        submit_btn = gr.Button("Submit", variant="primary")
-                        stop_btn = gr.Button("Stop Generation", variant="secondary")
-                        clear_btn = gr.Button("Clear Conversation")
-
-                with gr.Column(scale=3):
-                    conversation_display = gr.Textbox(
-                        label="Conversation & Results",
-                        lines=20,
-                        interactive=False
-                    )
-
-            last_code_display = gr.HTML(
-                label="Last Executed Code"
-            )
-
-            last_output_display = gr.HTML(
-                label="Last Output"
-            )
-
+                 model_a_url_input = gr.Textbox(
+                     label="Model A URL",
+                     value=model_a_url,
+                     placeholder="http://127.0.0.1:1234/v1/"
+                 )
+                 model_b_url_input = gr.Textbox(
+                    label="Model B URL",
+                    value=model_b_url,
+                    placeholder="http://127.0.0.1:1235/v1/"
+                 )
             with gr.Row():
-                show_last_code_btn = gr.Button("Show Last Code")
-                show_last_output_btn = gr.Button("Show Last Output")
+                 model_a_id_input = gr.Textbox(
+                     label="Model A ID",
+                     value=model_a_id,
+                     placeholder="phi-4"
+                 )
+                 model_b_id_input = gr.Textbox(
+                    label="Model B ID",
+                    value=model_b_id,
+                    placeholder="phi-4"
+                 )
+            with gr.Row():
+                 max_tokens_input = gr.Number(
+                     label="Max Tokens",
+                     value=int(max_tokens),
+                 )
+                 temperature_input = gr.Number(
+                     label="Temperature",
+                     value=float(temperature),
+                 )
+                 top_p_input = gr.Number(
+                     label="Top P",
+                     value=float(top_p),
+                 )
+            update_env_btn = gr.Button("Update Configuration")
 
-            status_display = gr.Textbox(
-                label="Status/Tests",
-                lines=2,
-                interactive=False,
-                visible=True
-            )
+         with gr.Row():
+             with gr.Column(scale=2):
+                 input_message = gr.Textbox(
+                     placeholder="Type your message here...",
+                     label="Input Message",
+                     lines=3
+                 )
 
+                 with gr.Row():
+                     submit_btn = gr.Button("Submit", variant="primary")
+                     stop_btn = gr.Button("Stop Generation", variant="secondary")
+                     clear_btn = gr.Button("Clear Conversation")
 
-            def handle_update_env(model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p):
-                """Handle the update of env variables"""
-                os.environ["MODEL_A_URL"] = model_a_url
-                os.environ["MODEL_B_URL"] = model_b_url
-                os.environ["MODEL_A_ID"] = model_a_id
-                os.environ["MODEL_B_ID"] = model_b_id
-                os.environ["MAX_TOKENS"] = str(max_tokens)
-                os.environ["TEMPERATURE"] = str(temperature)
-                os.environ["TOP_P"] = str(top_p)
-                
-                return f"Environment updated. MODEL_A_URL: {model_a_url}, MODEL_B_URL: {model_b_url}, MODEL_A_ID: {model_a_id}, MODEL_B_ID: {model_b_id}, MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p} - restart app for changes to fully take effect", model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p
-                
-            def handle_submit(message):
-                """Handle message submission with streaming."""
-                if not message:
-                    return "", "Please enter a message", "", ""
+             with gr.Column(scale=3):
+                 conversation_display = gr.Textbox(
+                     label="Conversation & Results",
+                     lines=20,
+                     interactive=False
+                 )
 
-                try:
-                    logger.info(f"Handling new message: {message[:50]}...")
+         last_code_display = gr.HTML(
+             label="Last Executed Code"
+         )
 
-                    result = manager.process_message(message)
+         last_output_display = gr.HTML(
+             label="Last Output"
+         )
 
-                    for response in result:
-                        yield response # No need for time.sleep here, it's handled in process_message
+         with gr.Row():
+             show_last_code_btn = gr.Button("Show Last Code")
+             show_last_output_btn = gr.Button("Show Last Output")
 
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    yield "", f"Error: {e}", execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
+         status_display = gr.Textbox(
+             label="Status/Tests",
+             lines=2,
+             interactive=False,
+             visible=True
+         )
 
-            def handle_stop():
-                """Handle stop button click."""
-                # The stopping mechanism is handled in should_stop_generation
-                return "Stopping generation...", "Stopping..."
+         def handle_update_env(model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p):
+             """Handle the update of env variables"""
+             try:
+               manager.update_config(
+                 model_a_url=model_a_url,
+                 model_b_url=model_b_url,
+                 model_a_id=model_a_id,
+                 model_b_id=model_b_id,
+                 max_tokens=max_tokens,
+                 temperature=temperature,
+                 top_p=top_p
+               )
+               return f"Configuration updated. MODEL_A_URL: {model_a_url}, MODEL_B_URL: {model_b_url}, MODEL_A_ID: {model_a_id}, MODEL_B_ID: {model_b_id}, MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p}", model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p
+             except Exception as e:
+               return f"Error updating configuration: {e}", model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p
 
-            def handle_clear():
-                """Handle conversation clearing."""
-                try:
-                    result = manager.clear_conversation()
-                    return "", result, "<p>No code executed yet.</p>", "<p>No output yet.</p>"
-                except Exception as e:
-                    error_msg = f"Error clearing conversation: {str(e)}"
-                    logger.error(error_msg)
-                    return "", error_msg, execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
+         def handle_submit(message):
+             """Handle message submission with streaming."""
+             if not message:
+                 return "", "Please enter a message", "", ""
 
-            def handle_show_last_code():
-                """Handle show last code button click."""
-                return execution_manager.get_last_code_html()
+             try:
+                 logger.info(f"Handling new message: {message[:50]}...")
 
-            def handle_show_last_output():
-                """Handle show last output button click."""
-                return execution_manager.get_last_output_html()
+                 result = manager.process_message(message)
 
-            # Wire up the interface events
-            update_env_btn.click(
-              fn=handle_update_env,
-              inputs=[model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, max_tokens_input, temperature_input, top_p_input],
-              outputs=[status_display, model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, max_tokens_input, temperature_input, top_p_input]
-            )
+                 for response in result:
+                     yield response # No need for time.sleep here, it's handled in process_message
 
-            submit_btn.click(
-                fn=handle_submit,
-                inputs=input_message,
-                outputs=[conversation_display, status_display, last_code_display, last_output_display],
-                show_progress=True
-            )
+             except Exception as e:
+                 logger.error(f"Error processing message: {e}")
+                 yield "", f"Error: {e}", execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
 
-            stop_btn.click(
-                fn=handle_stop,
-                inputs=None,
-                outputs=[conversation_display, status_display]
-            )
+         def handle_stop():
+             """Handle stop button click."""
+             # The stopping mechanism is handled in should_stop_generation
+             return "Stopping generation...", "Stopping..."
 
-            clear_btn.click(
-                fn=handle_clear,
-                inputs=None,
-                outputs=[conversation_display, status_display, last_code_display, last_output_display]
-            )
+         def handle_clear():
+             """Handle conversation clearing."""
+             try:
+                 result = manager.clear_conversation()
+                 return "", result, "<p>No code executed yet.</p>", "<p>No output yet.</p>"
+             except Exception as e:
+                 error_msg = f"Error clearing conversation: {str(e)}"
+                 logger.error(error_msg)
+                 return "", error_msg, execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
 
-            # Wire up the last code and output-related events
-            show_last_code_btn.click(
-                fn=handle_show_last_code,
-                inputs=None,
-                outputs=last_code_display
-            )
+         def handle_show_last_code():
+             """Handle show last code button click."""
+             return execution_manager.get_last_code_html()
 
-            show_last_output_btn.click(
-                fn=handle_show_last_output,
-                inputs=None,
-                outputs=last_output_display
-            )
+         def handle_show_last_output():
+             """Handle show last output button click."""
+             return execution_manager.get_last_output_html()
 
-            # Show conversation history on load
-            interface.load(
-                fn=manager.get_conversation_history,
-                inputs=None,
-                outputs=conversation_display
-            )
+         # Wire up the interface events
+         update_env_btn.click(
+           fn=handle_update_env,
+           inputs=[model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, max_tokens_input, temperature_input, top_p_input],
+           outputs=[status_display, model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, max_tokens_input, temperature_input, top_p_input]
+         )
 
-        interface.queue()
-        return interface
+         submit_btn.click(
+             fn=handle_submit,
+             inputs=input_message,
+             outputs=[conversation_display, status_display, last_code_display, last_output_display],
+             show_progress=True
+         )
 
-    except Exception as e:
-        error_msg = f"Error creating UI: {str(e)}\n{traceback.format_exc()}"
-        logger.error(error_msg)
-        raise
+         stop_btn.click(
+             fn=handle_stop,
+             inputs=None,
+             outputs=[conversation_display, status_display]
+         )
+
+         clear_btn.click(
+             fn=handle_clear,
+             inputs=None,
+             outputs=[conversation_display, status_display, last_code_display, last_output_display]
+         )
+
+         # Wire up the last code and output-related events
+         show_last_code_btn.click(
+             fn=handle_show_last_code,
+             inputs=None,
+             outputs=last_code_display
+         )
+
+         show_last_output_btn.click(
+             fn=handle_show_last_output,
+             inputs=None,
+             outputs=last_output_display
+         )
+
+         # Show conversation history on load
+         interface.load(
+             fn=manager.get_conversation_history,
+             inputs=None,
+             outputs=conversation_display
+         )
+
+     interface.queue()
+     return interface
+
+ except Exception as e:
+     error_msg = f"Error creating UI: {str(e)}\n{traceback.format_exc()}"
+     logger.error(error_msg)
+     raise
 
 def main():
     """Main entry point."""
@@ -943,7 +995,7 @@ def main():
         interface.launch(
             share=False,
             server_name="0.0.0.0",
-            server_port=12345,
+            server_port=12351,
             debug=True
         )
 
