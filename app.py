@@ -323,22 +323,21 @@ class SecurityError(Exception):
     pass
 
 class LLMManager:
-    def __init__(self, execution_manager, model_a_url=None, model_b_url=None, model_a_id=None, model_b_id=None, max_tokens=2000, temperature=0.7, top_p=0.95):
+    def __init__(self, execution_manager, model_url=None, model_a_alias="model_a", model_b_alias="model_b", model_id=None, max_tokens=2000, temperature=0.7, top_p=0.95):
         logger.info("Initializing LLMManager...")
         self.execution_manager = execution_manager
 
         # Initialize LLM URLs and IDs from environment variables or defaults
-        self.model_a_url = model_a_url or os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
-        self.model_b_url = model_b_url or os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
-        self.model_a_id = model_a_id or os.getenv("MODEL_A_ID", "phi-4")
-        self.model_b_id = model_b_id or os.getenv("MODEL_B_ID", "phi-4")
+        self.model_url = model_url or os.getenv("MODEL_URL", "http://127.0.0.1:1234/v1/")
+        self.model_id = model_id or os.getenv("MODEL_ID", "phi-4")  # Default model id
+        self.model_a_alias = model_a_alias
+        self.model_b_alias = model_b_alias
 
         self.max_tokens = max_tokens or int(os.getenv("MAX_TOKENS", "2000"))
         self.temperature = temperature or float(os.getenv("TEMPERATURE", "0.7"))
         self.top_p = top_p or float(os.getenv("TOP_P", "0.95"))
 
-        self._update_api_clients()
-
+        self._update_api_client()
 
         # Track execution context and test passes
         self.last_execution_locals = {}
@@ -387,36 +386,29 @@ assert result == 12, "Addition should work"
 assert add(-1, 1) == 0, "Should handle negatives"
 ```"""
         }
-
-
         self.conversation = [self.system_message]
 
-    def _update_api_clients(self):
-        """Updates the api clients with the current config"""
-        try:
-            self.llama_api_a = OpenAI(
-                api_key="api_key",
-                base_url=self.model_a_url
-            )
+    def _update_api_client(self):
+      """Updates the api client with the current config"""
+      try:
+        self.llama_api = OpenAI(
+            api_key="api_key",
+            base_url=self.model_url
+        )
+      except Exception as e:
+          logger.error(f"Failed to initialize LLMManager: {e}")
+          raise
 
-            self.llama_api_b = OpenAI(
-                api_key="api_key",
-                base_url=self.model_b_url
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize LLMManager: {e}")
-            raise
-            
-    def update_config(self, model_a_url=None, model_b_url=None, model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None):
+    def update_config(self, model_url=None, model_a_alias=None, model_b_alias=None, model_id=None, max_tokens=None, temperature=None, top_p=None):
         """Updates the config of the LLM Manager"""
-        if model_a_url:
-          self.model_a_url = model_a_url
-        if model_b_url:
-          self.model_b_url = model_b_url
-        if model_a_id:
-          self.model_a_id = model_a_id
-        if model_b_id:
-          self.model_b_id = model_b_id
+        if model_url:
+            self.model_url = model_url
+        if model_a_alias:
+          self.model_a_alias = model_a_alias
+        if model_b_alias:
+          self.model_b_alias = model_b_alias
+        if model_id:
+          self.model_id = model_id
         if max_tokens:
           self.max_tokens = int(max_tokens)
         if temperature:
@@ -424,33 +416,8 @@ assert add(-1, 1) == 0, "Should handle negatives"
         if top_p:
           self.top_p = float(top_p)
 
-        self._update_api_clients()
-        logger.info(f"LLM Config updated to: MODEL_A_URL: {self.model_a_url}, MODEL_B_URL: {self.model_b_url}, MODEL_A_ID: {self.model_a_id}, MODEL_B_ID: {self.model_b_id}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
-
-    def run_code(self, code):
-        """Execute code with enhanced safety checks and diff tracking."""
-        logger.info("Preparing to execute code block")
-        logger.debug(f"Code to execute:\n{code}")
-            
-    def update_config(self, model_a_url=None, model_b_url=None, model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None):
-        """Updates the config of the LLM Manager"""
-        if model_a_url:
-          self.model_a_url = model_a_url
-        if model_b_url:
-          self.model_b_url = model_b_url
-        if model_a_id:
-          self.model_a_id = model_a_id
-        if model_b_id:
-          self.model_b_id = model_b_id
-        if max_tokens:
-          self.max_tokens = int(max_tokens)
-        if temperature:
-          self.temperature = float(temperature)
-        if top_p:
-          self.top_p = float(top_p)
-
-        self._update_api_clients()
-        logger.info(f"LLM Config updated to: MODEL_A_URL: {self.model_a_url}, MODEL_B_URL: {self.model_b_url}, MODEL_A_ID: {self.model_a_id}, MODEL_B_ID: {self.model_b_id}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
+        self._update_api_client()
+        logger.info(f"LLM Config updated to: MODEL_URL: {self.model_url}, MODEL_ID: {self.model_id}, MODEL_A_ALIAS: {self.model_a_alias}, MODEL_B_ALIAS: {self.model_b_alias}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
 
 
     def run_code(self, code):
@@ -459,7 +426,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
         logger.debug(f"Code to execute:\n{code}")
 
         security_manager = SecurityManager()
-        
+
         # Validate code against security rules
         is_safe, message = security_manager.validate_code(code)
         if not is_safe:
@@ -492,39 +459,39 @@ assert add(-1, 1) == 0, "Should handle negatives"
             sys.stdout = old_stdout
 
     def run_tests(self, test_code):
-        """Execute test assertions with access to previous code context."""
-        logger.info("Running test assertions")
-        logger.debug(f"Test code:\n{test_code}")
+      """Execute test assertions with access to previous code context."""
+      logger.info("Running test assertions")
+      logger.debug(f"Test code:\n{test_code}")
 
-        old_stdout = sys.stdout
-        captured_output = StringIO()
-        sys.stdout = captured_output
+      old_stdout = sys.stdout
+      captured_output = StringIO()
+      sys.stdout = captured_output
 
-        try:
-            # Include previous execution context in test environment
-            test_globals = {
-                'print': print,
-                'assert': assert_,
-                **self.last_execution_locals
-            }
+      try:
+          # Include previous execution context in test environment
+          test_globals = {
+              'print': print,
+              'assert': assert_,
+              **self.last_execution_locals
+          }
 
-            exec(test_code, test_globals, {})
-            output = captured_output.getvalue()
-            self.passed_tests_count += 1
-            logger.info(f"Tests passed. Count: {self.passed_tests_count}")
+          exec(test_code, test_globals, {})
+          output = captured_output.getvalue()
+          self.passed_tests_count += 1
+          logger.info(f"Tests passed. Count: {self.passed_tests_count}")
 
-            # Update last executed code and output
-            self.execution_manager.update_last_code_and_output(test_code, output)
+          # Update last executed code and output
+          self.execution_manager.update_last_code_and_output(test_code, output)
 
-            return f"Unit tests passed: {output}"  # Include captured output
-        except AssertionError as e:
-            logger.info(f"Test failed: {str(e)}")
-            return f"Test failed: {str(e)}"
-        except Exception as e:
-            logger.error(f"Error running tests: {str(e)}")
-            return f"Error running tests: {str(e)}"
-        finally:
-            sys.stdout = old_stdout
+          return f"Unit tests passed: {output}"  # Include captured output
+      except AssertionError as e:
+          logger.info(f"Test failed: {str(e)}")
+          return f"Test failed: {str(e)}"
+      except Exception as e:
+          logger.error(f"Error running tests: {str(e)}")
+          return f"Error running tests: {str(e)}"
+      finally:
+          sys.stdout = old_stdout
 
     def should_stop_generation(self):
         """Check if enough tests have passed to stop generation."""
@@ -532,62 +499,49 @@ assert add(-1, 1) == 0, "Should handle negatives"
         # Stop if we've processed all blocks at least once AND met the passed test count
         return self.passed_tests_count >= self.max_passed_tests or self.all_blocks_processed_once
 
-    def query_llama(self, model, messages, stream=False):
-        """Query the LLM model with streaming support."""
-        logger.info(f"Querying model: {model}")
+    def query_llama(self, model_alias, messages, stream=False):
+      """Query the LLM model with streaming support."""
+      logger.info(f"Querying model: {model_alias}")
 
-        try:
-            if model == self.model_a_id:
-              chat_completion = self.llama_api_a.chat.completions.create(
-                  model=self.model_a_id,
-                  messages=messages,
-                  temperature=self.temperature,
-                  max_tokens=self.max_tokens,
-                  stream=stream,
-                  top_p=self.top_p,
-                  presence_penalty=0,
-                  frequency_penalty=0
-              )
-            elif model == self.model_b_id:
-              chat_completion = self.llama_api_b.chat.completions.create(
-                  model=self.model_b_id,
-                  messages=messages,
-                  temperature=self.temperature,
-                  max_tokens=self.max_tokens,
-                  stream=stream,
-                  top_p=self.top_p,
-                  presence_penalty=0,
-                  frequency_penalty=0
-                )
+      try:
+        chat_completion = self.llama_api.chat.completions.create(
+              model=self.model_id,  # Use the single model ID
+              messages=messages,
+              temperature=self.temperature,
+              max_tokens=self.max_tokens,
+              stream=stream,
+              top_p=self.top_p,
+              presence_penalty=0,
+              frequency_penalty=0
+        )
+
+
+        if stream:
+          for chunk in chat_completion:
+            if hasattr(chunk, 'choices') and chunk.choices:
+                if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta and hasattr(chunk.choices[0].delta, 'content'):
+                  content = chunk.choices[0].delta.content
+                elif hasattr(chunk.choices[0], 'text'):
+                    content = chunk.choices[0].text
+                else:
+                  # If there's no content, yield an empty string to maintain streaming
+                    content = ""
             else:
-              raise ValueError(f"Invalid model id: {model}")
+                # If there's no choices, yield an empty string to maintain streaming
+                content = ""
 
-            if stream:
-                for chunk in chat_completion:
-                    if hasattr(chunk, 'choices') and chunk.choices:
-                        if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta and hasattr(chunk.choices[0].delta, 'content'):
-                            content = chunk.choices[0].delta.content
-                        elif hasattr(chunk.choices[0], 'text'):
-                            content = chunk.choices[0].text
-                        else:
-                            # If there's no content, yield an empty string to maintain streaming
-                            content = ""
-                    else:
-                        # If there's no choices, yield an empty string to maintain streaming
-                        content = ""
+            if content is not None:
+                yield content
+        else:
+          return chat_completion.choices[0].message.content.strip()
 
-                    if content is not None:
-                        yield content
-            else:
-                return chat_completion.choices[0].message.content.strip()
-
-        except Exception as e:
-            error_msg = f"Error querying model {model}: {str(e)}"
-            logger.error(error_msg)
-            if stream:
-                yield f"Error: {error_msg}"
-            else:
-                return f"Error: {error_msg}"
+      except Exception as e:
+          error_msg = f"Error querying model {model_alias}: {str(e)}"
+          logger.error(error_msg)
+          if stream:
+              yield f"Error: {error_msg}"
+          else:
+              return f"Error: {error_msg}"
 
     def process_message(self, message):
         """Process a user message with code execution and testing."""
@@ -603,23 +557,22 @@ assert add(-1, 1) == 0, "Should handle negatives"
         try:
             self.conversation.append({"role": "user", "content": message})
 
-            # --- Process Model A ---
+            # --- Process Model A (using alias) ---
             logger.info("Getting Model A response")
             response_a = ""
 
             try:
-                for chunk in self.query_llama(self.model_a_id, self.conversation, stream=True):
+                for chunk in self.query_llama(self.model_a_alias, self.conversation, stream=True):
                     response_a += chunk
-                    temp_conversation = self.get_conversation_history() + f"\n{self.model_a_id}: {response_a}\n\n"
+                    temp_conversation = self.get_conversation_history() + f"\n{self.model_a_alias}: {response_a}\n\n"
                     yield temp_conversation, "Processing Model A response...", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                    
             except Exception as e:
                 error_msg = f"Error getting Model A response: {str(e)}"
                 logger.error(error_msg)
                 yield self.get_conversation_history(), "Error with Model A", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                 return
 
-            self.conversation.append({"role": "assistant", "name": self.model_a_id, "content": response_a})
+            self.conversation.append({"role": "assistant", "name": self.model_a_alias, "content": response_a})
 
             # --- Process code and test blocks from Model A ---
             code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_a, re.DOTALL)
@@ -628,12 +581,11 @@ assert add(-1, 1) == 0, "Should handle negatives"
             logger.debug(f"Model A Code Blocks: {code_blocks}")
             logger.debug(f"Model A Test Blocks: {test_blocks}")
 
-
             # If there are code blocks or test blocks
             if code_blocks or test_blocks:
                 # Iterate over code and test blocks
                 for i, code in enumerate(code_blocks):
-                     # Execute the code block
+                    # Execute the code block
                     if code:
                         logger.info(f"Executing code block {i+1} from Model A")
                         logger.debug(f"Code to execute (Model A block {i+1}):\n{code.strip()}")
@@ -643,7 +595,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
                         # Append the output to the conversation
                         code_response = f"Code block {i+1} output:\n{output}"
-                        self.conversation.append({"role": "assistant", "name": self.model_a_id, "content": code_response})
+                        self.conversation.append({"role": "assistant", "name": self.model_a_alias, "content": code_response})
                         yield self.get_conversation_history(), f"Executed code block {i+1} from Model A", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                         time.sleep(0.05)
 
@@ -666,8 +618,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
                 
                 self.all_blocks_processed_once = True
 
-
-            # --- Handoff to Model B ---
+            # --- Handoff to Model B (using alias) ---
             print("\n--- Handoff to Model B ---")
             print(f"Conversation so far:\n{self.get_conversation_history()}")
 
@@ -675,20 +626,19 @@ assert add(-1, 1) == 0, "Should handle negatives"
             logger.info("Getting Model B response")
             response_b = ""
             try:
-                for chunk in self.query_llama(self.model_b_id, self.conversation, stream=True):
+                for chunk in self.query_llama(self.model_b_alias, self.conversation, stream=True):
                     response_b += chunk
-                    temp_conversation = self.get_conversation_history() + f"\n{self.model_b_id}: {response_b}\n\n"
+                    temp_conversation = self.get_conversation_history() + f"\n{self.model_b_alias}: {response_b}\n\n"
                     yield temp_conversation, "Processing Model B response...", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-
             except Exception as e:
                 error_msg = f"Error getting Model B response: {str(e)}"
                 logger.error(error_msg)
                 yield self.get_conversation_history(), "Error with Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                 return
 
-            self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": response_b})
+            self.conversation.append({"role": "assistant", "name": self.model_b_alias, "content": response_b})
 
-                # --- Process code and test blocks from Model B ---
+              # --- Process code and test blocks from Model B ---
             code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
             test_blocks = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
 
@@ -698,40 +648,42 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
             # If there are code blocks or test blocks
             if code_blocks or test_blocks:
-                # Iterate over code and test blocks
-                for i, code in enumerate(code_blocks):
-                    # Execute the code block
-                    if code:
-                        logger.info(f"Executing code block {i+1} from Model B")
-                        logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
-                        output = self.run_code(code.strip())
-                        logger.debug(f"Output from code block {i+1}:\n{output}")
-                        print(f"Output from code block {i+1}:\n{output}") # Debugging
+              # Iterate over code and test blocks
+              for i, code in enumerate(code_blocks):
+                # Execute the code block
+                if code:
+                    logger.info(f"Executing code block {i+1} from Model B")
+                    logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
+                    output = self.run_code(code.strip())
+                    logger.debug(f"Output from code block {i+1}:\n{output}")
+                    print(f"Output from code block {i+1}:\n{output}") # Debugging
 
-                        # Append the output to the conversation
-                        code_response = f"Code block {i+1} output:\n{output}"
-                        self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": code_response})
-                        yield self.get_conversation_history(), f"Executed code block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                    # Append the output to the conversation
+                    code_response = f"Code block {i+1} output:\n{output}"
+                    self.conversation.append({"role": "assistant", "name": self.model_b_alias, "content": code_response})
+                    yield self.get_conversation_history(), f"Executed code block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                    time.sleep(0.05)
+
+                    # Run associated tests if they exist
+                    if i < len(test_blocks):
+                        test = test_blocks[i]
+                        logger.info(f"Executing test block {i+1} from Model B")
+                        logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
+                        test_result = self.run_tests(test.strip())
+                        logger.debug(f"Result from test block {i+1}:\n{test_result}")
+                        print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
+
+                        yield self.get_conversation_history(), f"Executed test block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                         time.sleep(0.05)
 
-                        # Run associated tests if they exist
-                        if i < len(test_blocks):
-                            test = test_blocks[i]
-                            logger.info(f"Executing test block {i+1} from Model B")
-                            logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
-                            test_result = self.run_tests(test.strip())
-                            logger.debug(f"Result from test block {i+1}:\n{test_result}")
-                            print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
-                            
-                            yield self.get_conversation_history(), f"Executed test block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                            time.sleep(0.05)
+                    if self.should_stop_generation():
+                        logger.info("Stopping generation - required test passes achieved")
+                        yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                        return
 
-                        if self.should_stop_generation():
-                            logger.info("Stopping generation - required test passes achieved")
-                            yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                            return
 
             yield self.get_conversation_history(), "Completed", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+
 
         except Exception as e:
             error_msg = f"Error processing message: {str(e)}"
@@ -753,233 +705,239 @@ assert add(-1, 1) == 0, "Should handle negatives"
             return error_msg
 
     def clear_conversation(self):
-        """Clear conversation history while preserving system message."""
-        try:
-            system_message = self.conversation[0]  # Save system message
-            self.conversation = [system_message]  # Reset with only system message
-            self.passed_tests_count = 0  # Reset test counter
-            logger.info("Conversation cleared")
-            return "Conversation cleared."
-        except Exception as e:
-            error_msg = f"Error clearing conversation: {str(e)}"
-            logger.error(error_msg)
-            return error_msg
+      """Clear conversation history while preserving system message."""
+      try:
+          system_message = self.conversation[0]  # Save system message
+          self.conversation = [system_message]  # Reset with only system message
+          self.passed_tests_count = 0  # Reset test counter
+          logger.info("Conversation cleared")
+          return "Conversation cleared."
+      except Exception as e:
+          error_msg = f"Error clearing conversation: {str(e)}"
+          logger.error(error_msg)
+          return error_msg
 
 def create_ui():
- """Create and configure the Gradio interface."""
- logger.info("Creating Gradio interface")
+    """Create and configure the Gradio interface."""
+    logger.info("Creating Gradio interface")
 
- try:
-     execution_manager = ExecutionManager()
-     # Initialize LLMManager with potentially updated URLs and IDs
-     model_a_url = os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
-     model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
-     model_a_id = os.getenv("MODEL_A_ID", "phi-4")
-     model_b_id = os.getenv("MODEL_B_ID", "phi-4")
-     max_tokens = os.getenv("MAX_TOKENS", "2000")
-     temperature = os.getenv("TEMPERATURE", "0.7")
-     top_p = os.getenv("TOP_P", "0.95")
-
-     manager = LLMManager(execution_manager, 
-                         model_a_url=model_a_url, 
-                         model_b_url=model_b_url,
-                         model_a_id=model_a_id,
-                         model_b_id=model_b_id,
-                         max_tokens=int(max_tokens),
-                         temperature=float(temperature),
-                         top_p=float(top_p))
+    try:
+        execution_manager = ExecutionManager()
+        # Initialize LLMManager with potentially updated URLs and IDs
+        model_url = os.getenv("MODEL_URL", "http://127.0.0.1:1234/v1/")
+        model_id = os.getenv("MODEL_ID", "phi-4")  # Default model id
+        model_a_alias = "model_a"
+        model_b_alias = "model_b"
+        max_tokens = os.getenv("MAX_TOKENS", "2000")
+        temperature = os.getenv("TEMPERATURE", "0.7")
+        top_p = os.getenv("TOP_P", "0.95")
 
 
-     with gr.Blocks(title="🚂🤖🪄 Conductor") as interface:
-         gr.Markdown("# 🚂🤖🪄 Conductor")
-         gr.Markdown("Enter your message to interact with the AI models. Code will be executed and tested until pass criteria are met.")
+        manager = LLMManager(execution_manager,
+                            model_url=model_url,
+                            model_id=model_id,
+                            model_a_alias=model_a_alias,
+                            model_b_alias=model_b_alias,
+                            max_tokens=int(max_tokens),
+                            temperature=float(temperature),
+                            top_p=float(top_p))
 
-         with gr.Accordion("Environment Variables", open=False):
+
+        with gr.Blocks(title="🚂🤖🪄 Conductor") as interface:
+            gr.Markdown("# 🚂🤖🪄 Conductor")
+            gr.Markdown("Enter your message to interact with the AI models. Code will be executed and tested until pass criteria are met.")
+
+            with gr.Accordion("Environment Variables", open=False):
+               with gr.Row():
+                    model_url_input = gr.Textbox(
+                        label="Model URL",
+                        value=model_url,
+                        placeholder="http://127.0.0.1:1234/v1/"
+                    )
+               with gr.Row():
+                    model_id_input = gr.Textbox(
+                        label="Model ID",
+                        value=model_id,
+                        placeholder="phi-4"
+                    )
+               with gr.Row():
+                    model_a_alias_input = gr.Textbox(
+                        label="Model A Alias",
+                        value=model_a_alias,
+                        placeholder="model_a"
+                    )
+                    model_b_alias_input = gr.Textbox(
+                        label="Model B Alias",
+                        value=model_b_alias,
+                        placeholder="model_b"
+                    )
+               with gr.Row():
+                    max_tokens_input = gr.Number(
+                        label="Max Tokens",
+                        value=int(max_tokens),
+                    )
+                    temperature_input = gr.Number(
+                        label="Temperature",
+                        value=float(temperature),
+                    )
+                    top_p_input = gr.Number(
+                        label="Top P",
+                        value=float(top_p),
+                    )
+               update_env_btn = gr.Button("Update Configuration")
+
             with gr.Row():
-                 model_a_url_input = gr.Textbox(
-                     label="Model A URL",
-                     value=model_a_url,
-                     placeholder="http://127.0.0.1:1234/v1/"
-                 )
-                 model_b_url_input = gr.Textbox(
-                    label="Model B URL",
-                    value=model_b_url,
-                    placeholder="http://127.0.0.1:1235/v1/"
-                 )
+                with gr.Column(scale=2):
+                    input_message = gr.Textbox(
+                        placeholder="Type your message here...",
+                        label="Input Message",
+                        lines=3
+                    )
+
+                    with gr.Row():
+                        submit_btn = gr.Button("Submit", variant="primary")
+                        stop_btn = gr.Button("Stop Generation", variant="secondary")
+                        clear_btn = gr.Button("Clear Conversation")
+
+                with gr.Column(scale=3):
+                    conversation_display = gr.Textbox(
+                        label="Conversation & Results",
+                        lines=20,
+                        interactive=False
+                    )
+
+            last_code_display = gr.HTML(
+                label="Last Executed Code"
+            )
+
+            last_output_display = gr.HTML(
+                label="Last Output"
+            )
+
             with gr.Row():
-                 model_a_id_input = gr.Textbox(
-                     label="Model A ID",
-                     value=model_a_id,
-                     placeholder="phi-4"
-                 )
-                 model_b_id_input = gr.Textbox(
-                    label="Model B ID",
-                    value=model_b_id,
-                    placeholder="phi-4"
-                 )
-            with gr.Row():
-                 max_tokens_input = gr.Number(
-                     label="Max Tokens",
-                     value=int(max_tokens),
-                 )
-                 temperature_input = gr.Number(
-                     label="Temperature",
-                     value=float(temperature),
-                 )
-                 top_p_input = gr.Number(
-                     label="Top P",
-                     value=float(top_p),
-                 )
-            update_env_btn = gr.Button("Update Configuration")
+                show_last_code_btn = gr.Button("Show Last Code")
+                show_last_output_btn = gr.Button("Show Last Output")
 
-         with gr.Row():
-             with gr.Column(scale=2):
-                 input_message = gr.Textbox(
-                     placeholder="Type your message here...",
-                     label="Input Message",
-                     lines=3
-                 )
+            status_display = gr.Textbox(
+                label="Status/Tests",
+                lines=2,
+                interactive=False,
+                visible=True
+            )
 
-                 with gr.Row():
-                     submit_btn = gr.Button("Submit", variant="primary")
-                     stop_btn = gr.Button("Stop Generation", variant="secondary")
-                     clear_btn = gr.Button("Clear Conversation")
 
-             with gr.Column(scale=3):
-                 conversation_display = gr.Textbox(
-                     label="Conversation & Results",
-                     lines=20,
-                     interactive=False
-                 )
+            def handle_update_env(model_url, model_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p):
+                """Handle the update of env variables"""
+                try:
+                    manager.update_config(
+                        model_url=model_url,
+                        model_id=model_id,
+                        model_a_alias=model_a_alias,
+                        model_b_alias=model_b_alias,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p
+                    )
+                    return f"Configuration updated. MODEL_URL: {model_url}, MODEL_ID: {model_id}, MODEL_A_ALIAS: {model_a_alias}, MODEL_B_ALIAS: {model_b_alias}, MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p}", model_url, model_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
+                except Exception as e:
+                  return f"Error updating configuration: {e}", model_url, model_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
 
-         last_code_display = gr.HTML(
-             label="Last Executed Code"
-         )
 
-         last_output_display = gr.HTML(
-             label="Last Output"
-         )
+            def handle_submit(message):
+                """Handle message submission with streaming."""
+                if not message:
+                    return "", "Please enter a message", "", ""
 
-         with gr.Row():
-             show_last_code_btn = gr.Button("Show Last Code")
-             show_last_output_btn = gr.Button("Show Last Output")
+                try:
+                    logger.info(f"Handling new message: {message[:50]}...")
 
-         status_display = gr.Textbox(
-             label="Status/Tests",
-             lines=2,
-             interactive=False,
-             visible=True
-         )
+                    result = manager.process_message(message)
 
-         def handle_update_env(model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p):
-             """Handle the update of env variables"""
-             try:
-               manager.update_config(
-                 model_a_url=model_a_url,
-                 model_b_url=model_b_url,
-                 model_a_id=model_a_id,
-                 model_b_id=model_b_id,
-                 max_tokens=max_tokens,
-                 temperature=temperature,
-                 top_p=top_p
-               )
-               return f"Configuration updated. MODEL_A_URL: {model_a_url}, MODEL_B_URL: {model_b_url}, MODEL_A_ID: {model_a_id}, MODEL_B_ID: {model_b_id}, MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p}", model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p
-             except Exception as e:
-               return f"Error updating configuration: {e}", model_a_url, model_b_url, model_a_id, model_b_id, max_tokens, temperature, top_p
+                    for response in result:
+                        yield response # No need for time.sleep here, it's handled in process_message
 
-         def handle_submit(message):
-             """Handle message submission with streaming."""
-             if not message:
-                 return "", "Please enter a message", "", ""
+                except Exception as e:
+                    logger.error(f"Error processing message: {e}")
+                    yield "", f"Error: {e}", execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
 
-             try:
-                 logger.info(f"Handling new message: {message[:50]}...")
+            def handle_stop():
+                """Handle stop button click."""
+                # The stopping mechanism is handled in should_stop_generation
+                return "Stopping generation...", "Stopping..."
 
-                 result = manager.process_message(message)
+            def handle_clear():
+                """Handle conversation clearing."""
+                try:
+                    result = manager.clear_conversation()
+                    return "", result, "<p>No code executed yet.</p>", "<p>No output yet.</p>"
+                except Exception as e:
+                    error_msg = f"Error clearing conversation: {str(e)}"
+                    logger.error(error_msg)
+                    return "", error_msg, execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
 
-                 for response in result:
-                     yield response # No need for time.sleep here, it's handled in process_message
+            def handle_show_last_code():
+                """Handle show last code button click."""
+                return execution_manager.get_last_code_html()
 
-             except Exception as e:
-                 logger.error(f"Error processing message: {e}")
-                 yield "", f"Error: {e}", execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
+            def handle_show_last_output():
+                """Handle show last output button click."""
+                return execution_manager.get_last_output_html()
 
-         def handle_stop():
-             """Handle stop button click."""
-             # The stopping mechanism is handled in should_stop_generation
-             return "Stopping generation...", "Stopping..."
 
-         def handle_clear():
-             """Handle conversation clearing."""
-             try:
-                 result = manager.clear_conversation()
-                 return "", result, "<p>No code executed yet.</p>", "<p>No output yet.</p>"
-             except Exception as e:
-                 error_msg = f"Error clearing conversation: {str(e)}"
-                 logger.error(error_msg)
-                 return "", error_msg, execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
+            # Wire up the interface events
+            update_env_btn.click(
+              fn=handle_update_env,
+              inputs=[model_url_input, model_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input],
+              outputs=[status_display, model_url_input, model_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input]
+            )
 
-         def handle_show_last_code():
-             """Handle show last code button click."""
-             return execution_manager.get_last_code_html()
 
-         def handle_show_last_output():
-             """Handle show last output button click."""
-             return execution_manager.get_last_output_html()
+            submit_btn.click(
+                fn=handle_submit,
+                inputs=input_message,
+                outputs=[conversation_display, status_display, last_code_display, last_output_display],
+                show_progress=True
+            )
 
-         # Wire up the interface events
-         update_env_btn.click(
-           fn=handle_update_env,
-           inputs=[model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, max_tokens_input, temperature_input, top_p_input],
-           outputs=[status_display, model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, max_tokens_input, temperature_input, top_p_input]
-         )
+            stop_btn.click(
+                fn=handle_stop,
+                inputs=None,
+                outputs=[conversation_display, status_display]
+            )
 
-         submit_btn.click(
-             fn=handle_submit,
-             inputs=input_message,
-             outputs=[conversation_display, status_display, last_code_display, last_output_display],
-             show_progress=True
-         )
+            clear_btn.click(
+                fn=handle_clear,
+                inputs=None,
+                outputs=[conversation_display, status_display, last_code_display, last_output_display]
+            )
 
-         stop_btn.click(
-             fn=handle_stop,
-             inputs=None,
-             outputs=[conversation_display, status_display]
-         )
+            # Wire up the last code and output-related events
+            show_last_code_btn.click(
+                fn=handle_show_last_code,
+                inputs=None,
+                outputs=last_code_display
+            )
 
-         clear_btn.click(
-             fn=handle_clear,
-             inputs=None,
-             outputs=[conversation_display, status_display, last_code_display, last_output_display]
-         )
+            show_last_output_btn.click(
+                fn=handle_show_last_output,
+                inputs=None,
+                outputs=last_output_display
+            )
 
-         # Wire up the last code and output-related events
-         show_last_code_btn.click(
-             fn=handle_show_last_code,
-             inputs=None,
-             outputs=last_code_display
-         )
+            # Show conversation history on load
+            interface.load(
+                fn=manager.get_conversation_history,
+                inputs=None,
+                outputs=conversation_display
+            )
 
-         show_last_output_btn.click(
-             fn=handle_show_last_output,
-             inputs=None,
-             outputs=last_output_display
-         )
+        interface.queue()
+        return interface
 
-         # Show conversation history on load
-         interface.load(
-             fn=manager.get_conversation_history,
-             inputs=None,
-             outputs=conversation_display
-         )
-
-     interface.queue()
-     return interface
-
- except Exception as e:
-     error_msg = f"Error creating UI: {str(e)}\n{traceback.format_exc()}"
-     logger.error(error_msg)
-     raise
+    except Exception as e:
+        error_msg = f"Error creating UI: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        raise
 
 def main():
     """Main entry point."""
