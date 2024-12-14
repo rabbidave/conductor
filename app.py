@@ -85,7 +85,8 @@ def restart_in_venv():
 class ExecutionManager:
     """Manages code execution and diffs."""
 
-    def __init__(self):
+    def __init__(self, security_manager):
+        self.security_manager = security_manager
         self.repo = self.get_git_repo()
         self.last_code = None  # Store the last executed code
         self.last_output = None  # Store the last execution output
@@ -156,10 +157,13 @@ class SecurityManager:
         # Allowed domains for web requests
         self.allowed_domains = {
             'api.github.com',
+            'api.search.brave.com',
             'raw.githubusercontent.com',
             'api.openai.com',
             'api.serpapi.com',
             'arxiv.org',
+            'en.wikipedia.org',
+            'www.reddit.com',
             'scholar.google.com',
             # Add more trusted domains as needed
         }
@@ -217,6 +221,7 @@ class SecurityManager:
             'datetime': __import__('datetime'),
             'itertools': __import__('itertools'),
             'collections': __import__('collections'),
+            'os.stat': os.stat #add this
         }
 
     def _create_safe_requests(self):
@@ -237,14 +242,15 @@ class SecurityManager:
     def _create_safe_os(self):
         """Create a restricted os module with only safe operations"""
         safe_os = type('SafeOS', (), {})()
-        
+
         # Allow only specific os functions
         safe_functions = [
-            'getcwd', 'listdir', 'path.exists', 'path.isfile', 
+            'getcwd', 'listdir', 'path.exists', 'path.isfile',
             'path.isdir', 'path.getsize', 'path.basename',
-            'path.dirname', 'path.join', 'path.splitext'
+            'path.dirname', 'path.join', 'path.splitext',
+            'scandir' #add this
         ]
-        
+
         for func in safe_functions:
             if '.' in func:
                 module, method = func.split('.')
@@ -253,7 +259,7 @@ class SecurityManager:
                 setattr(getattr(safe_os, module), method, getattr(os.path, method))
             else:
                 setattr(safe_os, func, getattr(os, func))
-                
+
         return safe_os
 
     def _validate_requests(self, code_block):
@@ -433,15 +439,13 @@ assert add(-1, 1) == 0, "Should handle negatives"
         logger.info(f"LLM Config updated to: MODEL_URLS: {self.model_urls}, MODEL_IDS: {self.model_ids} MODEL_A_ALIAS: {self.model_a_alias}, MODEL_B_ALIAS: {self.model_b_alias}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
 
 
-    def run_code(self, code):
+    def run_code(self, code, execution_locals):
         """Execute code with enhanced safety checks and diff tracking."""
         logger.info("Preparing to execute code block")
         logger.debug(f"Code to execute:\n{code}")
-
-        security_manager = SecurityManager()
-
+        
         # Validate code against security rules
-        is_safe, message = security_manager.validate_code(code)
+        is_safe, message = self.security_manager.validate_code(code)
         if not is_safe:
             error_msg = f"Security check failed: {message}"
             logger.warning(error_msg)
@@ -452,8 +456,8 @@ assert add(-1, 1) == 0, "Should handle negatives"
         sys.stdout = captured_output
 
         try:
-            # Execute code with safe globals
-            exec(code, security_manager.safe_globals, {})
+            # Execute code with safe globals using the controlled exec
+            self.security_manager.controlled_exec(code, self.security_manager.safe_globals, execution_locals)
             output = captured_output.getvalue()
             logger.info("Code execution successful")
 
@@ -461,7 +465,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
             output += "\n\n---\nHave fun y'all! 🤠🪄🤖\n"
 
             # Update last executed code and output
-            self.execution_manager.update_last_code_and_output(code, output)
+            self.update_last_code_and_output(code, output)
 
             return output
         except Exception as e:
@@ -470,41 +474,41 @@ assert add(-1, 1) == 0, "Should handle negatives"
             return f"Error executing code:\n{error_trace}"
         finally:
             sys.stdout = old_stdout
-
+            
     def run_tests(self, test_code):
-      """Execute test assertions with access to previous code context."""
-      logger.info("Running test assertions")
-      logger.debug(f"Test code:\n{test_code}")
+        """Execute test assertions with access to previous code context."""
+        logger.info("run_tests method called") # Added log
+        logger.debug(f"Test code:\n{test_code}")
 
-      old_stdout = sys.stdout
-      captured_output = StringIO()
-      sys.stdout = captured_output
+        old_stdout = sys.stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
 
-      try:
-          # Include previous execution context in test environment
-          test_globals = {
-              'print': print,
-              'assert': assert_,
-              **self.last_execution_locals
-          }
+        try:
+            # Include previous execution context in test environment
+            test_globals = {
+                'print': print,
+                'assert': assert_,
+                **self.last_execution_locals
+            }
 
-          exec(test_code, test_globals, {})
-          output = captured_output.getvalue()
-          self.passed_tests_count += 1
-          logger.info(f"Tests passed. Count: {self.passed_tests_count}")
+            exec(test_code, test_globals, {})
+            output = captured_output.getvalue()
+            self.passed_tests_count += 1
+            logger.info(f"Tests passed. Count: {self.passed_tests_count}")
 
-          # Update last executed code and output
-          self.execution_manager.update_last_code_and_output(test_code, output)
+            # Update last executed code and output
+            self.execution_manager.update_last_code_and_output(test_code, output)
 
-          return f"Unit tests passed: {output}"  # Include captured output
-      except AssertionError as e:
-          logger.info(f"Test failed: {str(e)}")
-          return f"Test failed: {str(e)}"
-      except Exception as e:
-          logger.error(f"Error running tests: {str(e)}")
-          return f"Error running tests: {str(e)}"
-      finally:
-          sys.stdout = old_stdout
+            return f"Unit tests passed: {output}"  # Include captured output
+        except AssertionError as e:
+            logger.info(f"Test failed: {str(e)}")
+            return f"Test failed: {str(e)}"
+        except Exception as e:
+            logger.error(f"Error running tests: {str(e)}")
+            return f"Error running tests: {str(e)}"
+        finally:
+            sys.stdout = old_stdout
 
     def should_stop_generation(self):
         """Check if enough tests have passed to stop generation."""
@@ -562,12 +566,12 @@ assert add(-1, 1) == 0, "Should handle negatives"
                 yield f"Error: {error_msg}"
             else:
                 return f"Error: {error_msg}"
-
-    def process_message(self, message):
+    
+        def process_message(self, message):
         """Process a user message with code execution and testing."""
         logger.info("Processing new user message")
         self.passed_tests_count = 0  # Reset test counter
-        self.all_blocks_processed_once = False # Reset block processing flag
+        self.all_blocks_processed_once = False  # Reset block processing flag
 
         if not message.strip():
             logger.warning("Empty message received")
@@ -595,21 +599,23 @@ assert add(-1, 1) == 0, "Should handle negatives"
             self.conversation.append({"role": "assistant", "name": self.model_a_alias, "content": response_a})
 
             # --- Process code and test blocks from Model A ---
-            code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_a, re.DOTALL)
-            test_blocks = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_a, re.DOTALL)
+            code_blocks_a = re.findall(r'(?:RUN-CODE\n)?\s*```(?:python)?\n(.*?)(?=\nTEST-ASSERT|\Z)', response_a, re.DOTALL)
+            test_blocks_a = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_a, re.DOTALL)
 
-            logger.debug(f"Model A Code Blocks: {code_blocks}")
-            logger.debug(f"Model A Test Blocks: {test_blocks}")
+            logger.debug(f"Model A Code Blocks: {code_blocks_a}")
+            logger.debug(f"Model A Test Blocks: {test_blocks_a}")
 
             # If there are code blocks or test blocks
-            if code_blocks or test_blocks:
+            if code_blocks_a or test_blocks_a:
                 # Iterate over code and test blocks
-                for i, code in enumerate(code_blocks):
+                for i, code in enumerate(code_blocks_a):
                     # Execute the code block
                     if code:
-                        logger.info(f"Executing code block {i+1} from Model A")
+                        logger.info(f"About to run code block from Model A or B")
                         logger.debug(f"Code to execute (Model A block {i+1}):\n{code.strip()}")
-                        output = self.run_code(code.strip())
+                        
+                        # Use ExecutionManager to execute code
+                        output = self.execution_manager.run_code(code.strip(), self.last_execution_locals)
                         logger.debug(f"Output from code block {i+1}:\n{output}")
                         print(f"Output from code block {i+1}:\n{output}")  # Debugging
 
@@ -620,14 +626,14 @@ assert add(-1, 1) == 0, "Should handle negatives"
                         time.sleep(0.05)
 
                         # Run associated tests if they exist
-                        if i < len(test_blocks):
-                            test = test_blocks[i]
+                        if i < len(test_blocks_a):
+                            test = test_blocks_a[i]
                             logger.info(f"Executing test block {i+1} from Model A")
                             logger.debug(f"Test to execute (Model A block {i+1}):\n{test.strip()}")
                             test_result = self.run_tests(test.strip())
                             logger.debug(f"Result from test block {i+1}:\n{test_result}")
                             print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
-                            
+
                             yield self.get_conversation_history(), f"Executed test block {i+1} from Model A", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                             time.sleep(0.05)
 
@@ -635,18 +641,19 @@ assert add(-1, 1) == 0, "Should handle negatives"
                             logger.info("Stopping generation - required test passes achieved")
                             yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                             return
-                
+
                 self.all_blocks_processed_once = True
 
             # --- Handoff to Model B (using alias) ---
             print("\n--- Handoff to Model B ---")
-            print(f"Conversation so far:\n{self.get_conversation_history()}")
+            conversation_string = self.get_conversation_history()
+            print(f"Conversation so far:\n{conversation_string}")
 
             # --- Process Model B if needed ---
             logger.info("Getting Model B response")
             response_b = ""
             try:
-                for chunk in self.query_llama(self.model_b_alias, self.conversation, stream=True):
+              for chunk in self.query_llama(self.model_b_alias, self.conversation + [{"role": "user", "content": f"Current conversation so far: {conversation_string}"}], stream=True):
                     response_b += chunk
                     temp_conversation = self.get_conversation_history() + f"\n{self.model_b_alias}: {response_b}\n\n"
                     yield temp_conversation, "Processing Model B response...", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
@@ -657,23 +664,25 @@ assert add(-1, 1) == 0, "Should handle negatives"
                 return
 
             self.conversation.append({"role": "assistant", "name": self.model_b_alias, "content": response_b})
+            logger.info(f"Model B response:\n{response_b}")
 
             # --- Process code and test blocks from Model B ---
-            code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
-            test_blocks = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
+            code_blocks_b = re.findall(r'(?:RUN-CODE\n)?\s*```(?:python)?\n(.*?)(?=\nTEST-ASSERT|\Z)', response_b, re.DOTALL)
+            test_blocks_b = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
 
-            logger.debug(f"Model B Code Blocks: {code_blocks}")
-            logger.debug(f"Model B Test Blocks: {test_blocks}")
+            logger.debug(f"Model B Code Blocks: {code_blocks_b}")
+            logger.debug(f"Model B Test Blocks: {test_blocks_b}")
 
             # If there are code blocks or test blocks
-            if code_blocks or test_blocks:
+            if code_blocks_b or test_blocks_b:
                 # Iterate over code and test blocks
-                for i, code in enumerate(code_blocks):
+                for i, code in enumerate(code_blocks_b):
                     # Execute the code block
                     if code:
                         logger.info(f"Executing code block {i+1} from Model B")
                         logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
-                        output = self.run_code(code.strip())
+                        # Use ExecutionManager to execute code
+                        output = self.execution_manager.run_code(code.strip(), self.last_execution_locals)
                         logger.debug(f"Output from code block {i+1}:\n{output}")
                         print(f"Output from code block {i+1}:\n{output}") # Debugging
 
@@ -684,8 +693,8 @@ assert add(-1, 1) == 0, "Should handle negatives"
                         time.sleep(0.05)
 
                         # Run associated tests if they exist
-                        if i < len(test_blocks):
-                            test = test_blocks[i]
+                        if i < len(test_blocks_b):
+                            test = test_blocks_b[i]
                             logger.info(f"Executing test block {i+1} from Model B")
                             logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
                             test_result = self.run_tests(test.strip())
@@ -701,7 +710,6 @@ assert add(-1, 1) == 0, "Should handle negatives"
                             return
 
             yield self.get_conversation_history(), "Completed", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-
 
         except Exception as e:
             error_msg = f"Error processing message: {str(e)}"
@@ -740,10 +748,11 @@ def create_ui():
     logger.info("Creating Gradio interface")
 
     try:
-        execution_manager = ExecutionManager()
+        security_manager = SecurityManager() # Create the SecurityManager
+        execution_manager = ExecutionManager(security_manager) # Pass it to the ExecutionManager
         # Initialize LLMManager with potentially updated URLs and IDs
         model_a_url = os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
-        model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
+        model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1234/v1/")
         model_a_id = os.getenv("MODEL_A_ID", "phi-4")
         model_b_id = os.getenv("MODEL_B_ID", "phi-4")
         model_a_alias = "model_a"
@@ -778,7 +787,7 @@ def create_ui():
                     model_b_url_input = gr.Textbox(
                         label="Model B URL",
                         value=model_b_url,
-                        placeholder="http://127.0.0.1:1235/v1/"
+                        placeholder="http://127.0.0.1:1234/v1/"
                     )
                with gr.Row():
                     model_a_id_input = gr.Textbox(
@@ -911,10 +920,12 @@ def create_ui():
 
             def handle_show_last_code():
                 """Handle show last code button click."""
+                logger.info("handle_show_last_code called")
                 return execution_manager.get_last_code_html()
 
             def handle_show_last_output():
                 """Handle show last output button click."""
+                logger.info("handle_show_last_output called")
                 return execution_manager.get_last_output_html()
 
             # Wire up the interface events
