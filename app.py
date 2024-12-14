@@ -539,7 +539,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
         try:
             if model == self.model_a_id:
               chat_completion = self.llama_api_a.chat.completions.create(
-                  model=model,
+                  model=self.model_a_id,
                   messages=messages,
                   temperature=self.temperature,
                   max_tokens=self.max_tokens,
@@ -550,7 +550,7 @@ assert add(-1, 1) == 0, "Should handle negatives"
               )
             elif model == self.model_b_id:
               chat_completion = self.llama_api_b.chat.completions.create(
-                  model=model,
+                  model=self.model_b_id,
                   messages=messages,
                   temperature=self.temperature,
                   max_tokens=self.max_tokens,
@@ -666,72 +666,72 @@ assert add(-1, 1) == 0, "Should handle negatives"
                 
                 self.all_blocks_processed_once = True
 
+
             # --- Handoff to Model B ---
             print("\n--- Handoff to Model B ---")
             print(f"Conversation so far:\n{self.get_conversation_history()}")
 
             # --- Process Model B if needed ---
-            if not self.should_stop_generation():
-                logger.info("Getting Model B response")
-                response_b = ""
-                try:
-                    for chunk in self.query_llama(self.model_b_id, self.conversation, stream=True):
-                        response_b += chunk
-                        temp_conversation = self.get_conversation_history() + f"\n{self.model_b_id}: {response_b}\n\n"
-                        yield temp_conversation, "Processing Model B response...", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+            logger.info("Getting Model B response")
+            response_b = ""
+            try:
+                for chunk in self.query_llama(self.model_b_id, self.conversation, stream=True):
+                    response_b += chunk
+                    temp_conversation = self.get_conversation_history() + f"\n{self.model_b_id}: {response_b}\n\n"
+                    yield temp_conversation, "Processing Model B response...", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
 
-                except Exception as e:
-                    error_msg = f"Error getting Model B response: {str(e)}"
-                    logger.error(error_msg)
-                    yield self.get_conversation_history(), "Error with Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                    return
+            except Exception as e:
+                error_msg = f"Error getting Model B response: {str(e)}"
+                logger.error(error_msg)
+                yield self.get_conversation_history(), "Error with Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                return
 
-                self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": response_b})
+            self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": response_b})
 
                 # --- Process code and test blocks from Model B ---
-                code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
-                test_blocks = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
+            code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
+            test_blocks = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
 
-                logger.debug(f"Model B Code Blocks: {code_blocks}")
-                logger.debug(f"Model B Test Blocks: {test_blocks}")
+            logger.debug(f"Model B Code Blocks: {code_blocks}")
+            logger.debug(f"Model B Test Blocks: {test_blocks}")
 
 
-                # If there are code blocks or test blocks
-                if code_blocks or test_blocks:
-                    # Iterate over code and test blocks
-                    for i, code in enumerate(code_blocks):
-                        # Execute the code block
-                        if code:
-                            logger.info(f"Executing code block {i+1} from Model B")
-                            logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
-                            output = self.run_code(code.strip())
-                            logger.debug(f"Output from code block {i+1}:\n{output}")
-                            print(f"Output from code block {i+1}:\n{output}") # Debugging
+            # If there are code blocks or test blocks
+            if code_blocks or test_blocks:
+                # Iterate over code and test blocks
+                for i, code in enumerate(code_blocks):
+                    # Execute the code block
+                    if code:
+                        logger.info(f"Executing code block {i+1} from Model B")
+                        logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
+                        output = self.run_code(code.strip())
+                        logger.debug(f"Output from code block {i+1}:\n{output}")
+                        print(f"Output from code block {i+1}:\n{output}") # Debugging
 
-                            # Append the output to the conversation
-                            code_response = f"Code block {i+1} output:\n{output}"
-                            self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": code_response})
-                            yield self.get_conversation_history(), f"Executed code block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                        # Append the output to the conversation
+                        code_response = f"Code block {i+1} output:\n{output}"
+                        self.conversation.append({"role": "assistant", "name": self.model_b_id, "content": code_response})
+                        yield self.get_conversation_history(), f"Executed code block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                        time.sleep(0.05)
+
+                        # Run associated tests if they exist
+                        if i < len(test_blocks):
+                            test = test_blocks[i]
+                            logger.info(f"Executing test block {i+1} from Model B")
+                            logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
+                            test_result = self.run_tests(test.strip())
+                            logger.debug(f"Result from test block {i+1}:\n{test_result}")
+                            print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
+                            
+                            yield self.get_conversation_history(), f"Executed test block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                             time.sleep(0.05)
 
-                            # Run associated tests if they exist
-                            if i < len(test_blocks):
-                                test = test_blocks[i]
-                                logger.info(f"Executing test block {i+1} from Model B")
-                                logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
-                                test_result = self.run_tests(test.strip())
-                                logger.debug(f"Result from test block {i+1}:\n{test_result}")
-                                print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
-                                
-                                yield self.get_conversation_history(), f"Executed test block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                                time.sleep(0.05)
+                        if self.should_stop_generation():
+                            logger.info("Stopping generation - required test passes achieved")
+                            yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                            return
 
-                            if self.should_stop_generation():
-                                logger.info("Stopping generation - required test passes achieved")
-                                yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                                return
-
-                yield self.get_conversation_history(), "Completed", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+            yield self.get_conversation_history(), "Completed", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
 
         except Exception as e:
             error_msg = f"Error processing message: {str(e)}"
@@ -995,7 +995,7 @@ def main():
         interface.launch(
             share=False,
             server_name="0.0.0.0",
-            server_port=12351,
+            server_port=12345,
             debug=True
         )
 
