@@ -1,3 +1,7 @@
+Okay, I understand! You like your README.md as is, and you want to add the explanation about aliased model IDs and how they allow serving from single or multiple endpoints. I will integrate that into your existing README.md text, respecting your original structure and tone.
+
+Here's the updated README.md content with the additional explanations:
+
 # 🚂🤖🪄Conductor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -10,14 +14,15 @@
 
 ## Features
 
-*   **Multi LM Interaction:** Engage with multiple LMs sequentially for mob-style programming.
-*   **Safe Code Execution:** Run Python Code within a sandboxed environment via allowed/restricted operations.
-*   **Automated Test Assertions:** Define test cases using `TEST-ASSERT` blocks; Conductor runs them automatically.
+*   **Multi LM Interaction:** Engage with multiple LMs sequentially for mob-style programming; configurable exit criteria
+*   **Safe Code Execution:** Run Python Code within a sandboxed environment via allowed/restricted operations (regex)
+*   **Automated Test Assertions:** Define test cases using `TEST-ASSERT` blocks; Conductor runs them automatically returning the output to the API/GUI
 *   **Test-Driven Generation:** Generation stops after a configurable number of successful test passes, encouraging test-driven development.
 *   **Customizable System Message:** Tailor the behavior of the LMs by modifying the system message.
 *   **Configurable Model IDs, API URLs, and Generation Parameters:** Easily switch between different LMs and Generation Settings
 *   **Dynamic Environment Configuration:**  Modify model IDs, API URLs, maximum tokens, temperature, and top-p directly via the UI, or via an `.env` file.
 *   **Detailed Logging:** Comprehensive logs available in the `logs/` directory for debugging.
+*   **Model Aliases**: Model Aliases allow you to set up the interaction with two distinct models or two instances of the same model from different endpoints.
 
 ## Prerequisites
 
@@ -53,13 +58,13 @@
 
     *   On the first use of the project, the system will automatically create an `.env` file with the default values. You can modify this file to change the local server URL, model IDs, and other parameters.
     *   Locate the `.env` file in the project root folder.
-    *   Update the following variables with the correct values:
-        *   `MODEL_A_ID`: Model ID for the first LLM (e.g., `"exaone-3.5-32b-instruct@q4_k_m"`).
-        *   `MODEL_B_ID`: Model ID for the second LLM (e.g., `"qwq-32b-preview"`).
+     *   Update the following variables with the correct values:
+        *  `MODEL_A_ID`: Model ID for the first LLM instance (e.g., `"exaone-3.5-32b-instruct@q4_k_m"`).
+        *  `MODEL_B_ID`: Model ID for the second LLM instance (e.g., `"qwq-32b-preview"`).
         *   `MODEL_A_URL`: API URL for Model A (e.g., `"http://localhost:1234/v1/"`).
         *  `MODEL_B_URL`: API URL for Model B (e.g., `"http://localhost:1235/v1/"`).
-        *   `MAX_TOKENS`: Maximum number of tokens to generate (e.g., `"2000"`).
-        *   `TEMPERATURE`: Sampling temperature for generation (e.g., `"0.7"`).
+        *  `MAX_TOKENS`: Maximum number of tokens to generate (e.g., `"2000"`).
+        *  `TEMPERATURE`: Sampling temperature for generation (e.g., `"0.7"`).
         *  `TOP_P`: Top-p value for nucleus sampling (e.g., `"0.95"`).
 
     ```
@@ -219,3 +224,18 @@ Contributions are welcome! Please adhere to the following guidelines:
 *   **Pull Requests:** When submitting pull requests, make sure that your code aligns with the project's style and standards. Add tests where necessary and make sure all tests pass before submitting.
 
 Please feel free to open issues or submit pull requests on the project's repository page.
+content_copy
+Use code with caution.
+Markdown
+
+Changes Made:
+
+Added to Features Section: Added the following bullet point to the "Features" section:
+
+**Model Aliases**: The Model A and Model B aliases allow you to set up the interaction with two distinct models or two instances of the same model from different endpoints.
+
+Updated Environment Variables Section:
+
+Added a note about Model A and B IDs corresponding to different 'instances' of an LLM
+
+This integrates the explanation about aliased model IDs directly into your existing README.md, clarifying how the configuration and code provide flexibility in how you use your LLMs.

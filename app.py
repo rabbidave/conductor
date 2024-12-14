@@ -323,21 +323,28 @@ class SecurityError(Exception):
     pass
 
 class LLMManager:
-    def __init__(self, execution_manager, model_url=None, model_a_alias="model_a", model_b_alias="model_b", model_id=None, max_tokens=2000, temperature=0.7, top_p=0.95):
+    def __init__(self, execution_manager, model_a_url=None, model_b_url=None, model_a_alias="model_a", model_b_alias="model_b", model_a_id=None, model_b_id=None, max_tokens=2000, temperature=0.7, top_p=0.95):
         logger.info("Initializing LLMManager...")
         self.execution_manager = execution_manager
 
         # Initialize LLM URLs and IDs from environment variables or defaults
-        self.model_url = model_url or os.getenv("MODEL_URL", "http://127.0.0.1:1234/v1/")
-        self.model_id = model_id or os.getenv("MODEL_ID", "phi-4")  # Default model id
+        self.model_urls = {
+            model_a_alias: model_a_url or os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/"),
+            model_b_alias: model_b_url or os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
+        }
+        self.model_ids = {
+            model_a_alias: model_a_id or os.getenv("MODEL_A_ID", "phi-4"),
+            model_b_alias: model_b_id or os.getenv("MODEL_B_ID", "phi-4")
+        }
         self.model_a_alias = model_a_alias
         self.model_b_alias = model_b_alias
+
 
         self.max_tokens = max_tokens or int(os.getenv("MAX_TOKENS", "2000"))
         self.temperature = temperature or float(os.getenv("TEMPERATURE", "0.7"))
         self.top_p = top_p or float(os.getenv("TOP_P", "0.95"))
 
-        self._update_api_client()
+        self._update_api_clients()
 
         # Track execution context and test passes
         self.last_execution_locals = {}
@@ -388,36 +395,42 @@ assert add(-1, 1) == 0, "Should handle negatives"
         }
         self.conversation = [self.system_message]
 
-    def _update_api_client(self):
-      """Updates the api client with the current config"""
+    def _update_api_clients(self):
+      """Updates the api clients with the current config"""
       try:
-        self.llama_api = OpenAI(
-            api_key="api_key",
-            base_url=self.model_url
-        )
+          self.llama_api_clients = {}
+          for alias, url in self.model_urls.items():
+              self.llama_api_clients[alias] = OpenAI(
+                api_key="api_key",
+                base_url=url
+            )
       except Exception as e:
           logger.error(f"Failed to initialize LLMManager: {e}")
           raise
 
-    def update_config(self, model_url=None, model_a_alias=None, model_b_alias=None, model_id=None, max_tokens=None, temperature=None, top_p=None):
+    def update_config(self, model_a_url=None, model_b_url=None, model_a_alias=None, model_b_alias=None, model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None):
         """Updates the config of the LLM Manager"""
-        if model_url:
-            self.model_url = model_url
+        if model_a_url and model_a_alias:
+            self.model_urls[model_a_alias] = model_a_url
+        if model_b_url and model_b_alias:
+            self.model_urls[model_b_alias] = model_b_url
         if model_a_alias:
-          self.model_a_alias = model_a_alias
+            self.model_a_alias = model_a_alias
         if model_b_alias:
-          self.model_b_alias = model_b_alias
-        if model_id:
-          self.model_id = model_id
+            self.model_b_alias = model_b_alias
+        if model_a_id and model_a_alias:
+          self.model_ids[model_a_alias] = model_a_id
+        if model_b_id and model_b_alias:
+          self.model_ids[model_b_alias] = model_b_id
         if max_tokens:
-          self.max_tokens = int(max_tokens)
+            self.max_tokens = int(max_tokens)
         if temperature:
-          self.temperature = float(temperature)
+            self.temperature = float(temperature)
         if top_p:
-          self.top_p = float(top_p)
+            self.top_p = float(top_p)
 
-        self._update_api_client()
-        logger.info(f"LLM Config updated to: MODEL_URL: {self.model_url}, MODEL_ID: {self.model_id}, MODEL_A_ALIAS: {self.model_a_alias}, MODEL_B_ALIAS: {self.model_b_alias}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
+        self._update_api_clients()
+        logger.info(f"LLM Config updated to: MODEL_URLS: {self.model_urls}, MODEL_IDS: {self.model_ids} MODEL_A_ALIAS: {self.model_a_alias}, MODEL_B_ALIAS: {self.model_b_alias}, MAX_TOKENS: {self.max_tokens}, TEMPERATURE: {self.temperature}, TOP_P: {self.top_p}")
 
 
     def run_code(self, code):
@@ -500,48 +513,55 @@ assert add(-1, 1) == 0, "Should handle negatives"
         return self.passed_tests_count >= self.max_passed_tests or self.all_blocks_processed_once
 
     def query_llama(self, model_alias, messages, stream=False):
-      """Query the LLM model with streaming support."""
-      logger.info(f"Querying model: {model_alias}")
+        """Query the LLM model with streaming support."""
+        logger.info(f"Querying model: {model_alias}")
+        try:
+            api_client = self.llama_api_clients.get(model_alias)
+            if not api_client:
+                raise ValueError(f"No api client found for alias {model_alias}")
 
-      try:
-        chat_completion = self.llama_api.chat.completions.create(
-              model=self.model_id,  # Use the single model ID
-              messages=messages,
-              temperature=self.temperature,
-              max_tokens=self.max_tokens,
-              stream=stream,
-              top_p=self.top_p,
-              presence_penalty=0,
-              frequency_penalty=0
-        )
+            model_id = self.model_ids.get(model_alias)
+            if not model_id:
+               raise ValueError(f"No model id found for alias {model_alias}")
 
 
-        if stream:
-          for chunk in chat_completion:
-            if hasattr(chunk, 'choices') and chunk.choices:
-                if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta and hasattr(chunk.choices[0].delta, 'content'):
-                  content = chunk.choices[0].delta.content
-                elif hasattr(chunk.choices[0], 'text'):
-                    content = chunk.choices[0].text
-                else:
-                  # If there's no content, yield an empty string to maintain streaming
-                    content = ""
+            chat_completion = api_client.chat.completions.create(
+                model=model_id,  # Use the model ID from the dictionary
+                messages=messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                stream=stream,
+                top_p=self.top_p,
+                presence_penalty=0,
+                frequency_penalty=0
+            )
+
+            if stream:
+                for chunk in chat_completion:
+                    if hasattr(chunk, 'choices') and chunk.choices:
+                        if hasattr(chunk.choices[0], 'delta') and chunk.choices[0].delta and hasattr(chunk.choices[0].delta, 'content'):
+                            content = chunk.choices[0].delta.content
+                        elif hasattr(chunk.choices[0], 'text'):
+                            content = chunk.choices[0].text
+                        else:
+                            # If there's no content, yield an empty string to maintain streaming
+                            content = ""
+                    else:
+                        # If there's no choices, yield an empty string to maintain streaming
+                        content = ""
+
+                    if content is not None:
+                        yield content
             else:
-                # If there's no choices, yield an empty string to maintain streaming
-                content = ""
+                return chat_completion.choices[0].message.content.strip()
 
-            if content is not None:
-                yield content
-        else:
-          return chat_completion.choices[0].message.content.strip()
-
-      except Exception as e:
-          error_msg = f"Error querying model {model_alias}: {str(e)}"
-          logger.error(error_msg)
-          if stream:
-              yield f"Error: {error_msg}"
-          else:
-              return f"Error: {error_msg}"
+        except Exception as e:
+            error_msg = f"Error querying model {model_alias}: {str(e)}"
+            logger.error(error_msg)
+            if stream:
+                yield f"Error: {error_msg}"
+            else:
+                return f"Error: {error_msg}"
 
     def process_message(self, message):
         """Process a user message with code execution and testing."""
@@ -638,49 +658,47 @@ assert add(-1, 1) == 0, "Should handle negatives"
 
             self.conversation.append({"role": "assistant", "name": self.model_b_alias, "content": response_b})
 
-              # --- Process code and test blocks from Model B ---
+            # --- Process code and test blocks from Model B ---
             code_blocks = re.findall(r'RUN-CODE\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
             test_blocks = re.findall(r'TEST-ASSERT\n\s*```(?:python)?\n(.*?)\n\s*```', response_b, re.DOTALL)
 
             logger.debug(f"Model B Code Blocks: {code_blocks}")
             logger.debug(f"Model B Test Blocks: {test_blocks}")
 
-
             # If there are code blocks or test blocks
             if code_blocks or test_blocks:
-              # Iterate over code and test blocks
-              for i, code in enumerate(code_blocks):
-                # Execute the code block
-                if code:
-                    logger.info(f"Executing code block {i+1} from Model B")
-                    logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
-                    output = self.run_code(code.strip())
-                    logger.debug(f"Output from code block {i+1}:\n{output}")
-                    print(f"Output from code block {i+1}:\n{output}") # Debugging
+                # Iterate over code and test blocks
+                for i, code in enumerate(code_blocks):
+                    # Execute the code block
+                    if code:
+                        logger.info(f"Executing code block {i+1} from Model B")
+                        logger.debug(f"Code to execute (Model B block {i+1}):\n{code.strip()}")
+                        output = self.run_code(code.strip())
+                        logger.debug(f"Output from code block {i+1}:\n{output}")
+                        print(f"Output from code block {i+1}:\n{output}") # Debugging
 
-                    # Append the output to the conversation
-                    code_response = f"Code block {i+1} output:\n{output}"
-                    self.conversation.append({"role": "assistant", "name": self.model_b_alias, "content": code_response})
-                    yield self.get_conversation_history(), f"Executed code block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                    time.sleep(0.05)
-
-                    # Run associated tests if they exist
-                    if i < len(test_blocks):
-                        test = test_blocks[i]
-                        logger.info(f"Executing test block {i+1} from Model B")
-                        logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
-                        test_result = self.run_tests(test.strip())
-                        logger.debug(f"Result from test block {i+1}:\n{test_result}")
-                        print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
-
-                        yield self.get_conversation_history(), f"Executed test block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                        # Append the output to the conversation
+                        code_response = f"Code block {i+1} output:\n{output}"
+                        self.conversation.append({"role": "assistant", "name": self.model_b_alias, "content": code_response})
+                        yield self.get_conversation_history(), f"Executed code block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
                         time.sleep(0.05)
 
-                    if self.should_stop_generation():
-                        logger.info("Stopping generation - required test passes achieved")
-                        yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
-                        return
+                        # Run associated tests if they exist
+                        if i < len(test_blocks):
+                            test = test_blocks[i]
+                            logger.info(f"Executing test block {i+1} from Model B")
+                            logger.debug(f"Test to execute (Model B block {i+1}):\n{test.strip()}")
+                            test_result = self.run_tests(test.strip())
+                            logger.debug(f"Result from test block {i+1}:\n{test_result}")
+                            print(f"Result from test block {i+1}:\n{test_result}")  # Debugging
 
+                            yield self.get_conversation_history(), f"Executed test block {i+1} from Model B", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                            time.sleep(0.05)
+
+                        if self.should_stop_generation():
+                            logger.info("Stopping generation - required test passes achieved")
+                            yield self.get_conversation_history(), "Complete", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
+                            return
 
             yield self.get_conversation_history(), "Completed", self.execution_manager.get_last_code_html(), self.execution_manager.get_last_output_html()
 
@@ -724,20 +742,23 @@ def create_ui():
     try:
         execution_manager = ExecutionManager()
         # Initialize LLMManager with potentially updated URLs and IDs
-        model_url = os.getenv("MODEL_URL", "http://127.0.0.1:1234/v1/")
-        model_id = os.getenv("MODEL_ID", "phi-4")  # Default model id
+        model_a_url = os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
+        model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
+        model_a_id = os.getenv("MODEL_A_ID", "phi-4")
+        model_b_id = os.getenv("MODEL_B_ID", "phi-4")
         model_a_alias = "model_a"
         model_b_alias = "model_b"
         max_tokens = os.getenv("MAX_TOKENS", "2000")
         temperature = os.getenv("TEMPERATURE", "0.7")
         top_p = os.getenv("TOP_P", "0.95")
 
-
         manager = LLMManager(execution_manager,
-                            model_url=model_url,
-                            model_id=model_id,
+                            model_a_url=model_a_url,
+                            model_b_url=model_b_url,
                             model_a_alias=model_a_alias,
                             model_b_alias=model_b_alias,
+                            model_a_id=model_a_id,
+                            model_b_id=model_b_id,
                             max_tokens=int(max_tokens),
                             temperature=float(temperature),
                             top_p=float(top_p))
@@ -749,15 +770,25 @@ def create_ui():
 
             with gr.Accordion("Environment Variables", open=False):
                with gr.Row():
-                    model_url_input = gr.Textbox(
-                        label="Model URL",
-                        value=model_url,
+                    model_a_url_input = gr.Textbox(
+                        label="Model A URL",
+                        value=model_a_url,
                         placeholder="http://127.0.0.1:1234/v1/"
                     )
+                    model_b_url_input = gr.Textbox(
+                        label="Model B URL",
+                        value=model_b_url,
+                        placeholder="http://127.0.0.1:1235/v1/"
+                    )
                with gr.Row():
-                    model_id_input = gr.Textbox(
-                        label="Model ID",
-                        value=model_id,
+                    model_a_id_input = gr.Textbox(
+                        label="Model A ID",
+                        value=model_a_id,
+                        placeholder="phi-4"
+                    )
+                    model_b_id_input = gr.Textbox(
+                        label="Model B ID",
+                        value=model_b_id,
                         placeholder="phi-4"
                     )
                with gr.Row():
@@ -826,21 +857,24 @@ def create_ui():
             )
 
 
-            def handle_update_env(model_url, model_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p):
+            def handle_update_env(model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p):
                 """Handle the update of env variables"""
                 try:
                     manager.update_config(
-                        model_url=model_url,
-                        model_id=model_id,
-                        model_a_alias=model_a_alias,
-                        model_b_alias=model_b_alias,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=top_p
+                      model_a_url=model_a_url,
+                      model_b_url=model_b_url,
+                      model_a_id=model_a_id,
+                      model_b_id=model_b_id,
+                      model_a_alias=model_a_alias,
+                      model_b_alias=model_b_alias,
+                      max_tokens=max_tokens,
+                      temperature=temperature,
+                      top_p=top_p
                     )
-                    return f"Configuration updated. MODEL_URL: {model_url}, MODEL_ID: {model_id}, MODEL_A_ALIAS: {model_a_alias}, MODEL_B_ALIAS: {model_b_alias}, MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p}", model_url, model_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
+                    return f"Configuration updated. MODEL_URLS: {manager.model_urls}, MODEL_IDS: {manager.model_ids} MODEL_A_ALIAS: {model_a_alias}, MODEL_B_ALIAS: {model_b_alias}, MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p}", model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
                 except Exception as e:
-                  return f"Error updating configuration: {e}", model_url, model_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
+                  return f"Error updating configuration: {e}", model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
+
 
 
             def handle_submit(message):
@@ -883,12 +917,11 @@ def create_ui():
                 """Handle show last output button click."""
                 return execution_manager.get_last_output_html()
 
-
             # Wire up the interface events
             update_env_btn.click(
               fn=handle_update_env,
-              inputs=[model_url_input, model_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input],
-              outputs=[status_display, model_url_input, model_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input]
+              inputs=[model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input],
+              outputs=[status_display, model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input]
             )
 
 
@@ -938,6 +971,9 @@ def create_ui():
         error_msg = f"Error creating UI: {str(e)}\n{traceback.format_exc()}"
         logger.error(error_msg)
         raise
+        error_msg = f"Error creating UI: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        raise
 
 def main():
     """Main entry point."""
@@ -953,7 +989,7 @@ def main():
         interface.launch(
             share=False,
             server_name="0.0.0.0",
-            server_port=12345,
+            server_port=31337,
             debug=True
         )
 
