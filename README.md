@@ -13,11 +13,10 @@
 * **Simplified Code Execution:** Just use standard Markdown code blocks with language specifiers (```python for code, ```python-test for tests)
 * **Automated Test Assertions:** Tests are automatically detected and executed from code blocks marked as ```python-test
 * **Test-Driven Generation:** Generation stops after a configurable number of successful test passes, encouraging test-driven development
-* **Customizable System Message:** Tailor the behavior of the LMs by modifying the system message
 * **Configurable Model IDs, API URLs, and Generation Parameters:** Easily switch between different LMs and Generation Settings
-* **Dynamic Environment Configuration:** Modify model IDs, API URLs, maximum tokens, temperature, and top-p directly via the UI, or via an `.env` file
+* **Dynamic Environment Configuration:** Modify model IDs, API URLs, maximum tokens, temperature, and top-p via the UI or `.env` file
 * **Detailed Logging:** Comprehensive logs available in the `logs/` directory for debugging
-* **Model Aliases:** Model Aliases allow you to set up the interaction with two distinct models or two instances of the same model from different endpoints
+* **Model Aliases:** Model Aliases allow you to set up the interaction with two distinct models or two instances of the same model
 
 ## Prerequisites
 
@@ -60,7 +59,7 @@ Example `.env` file:
 MODEL_A_ID="your-model-a-id"
 MODEL_B_ID="your-model-b-id"
 MODEL_A_URL="http://localhost:1234/v1/"
-MODEL_B_URL="http://localhost:1235/v1/"
+MODEL_B_URL="http://localhost:1234/v1/"
 MAX_TOKENS="2000"
 TEMPERATURE="0.7"
 TOP_P="0.95"
@@ -80,7 +79,7 @@ python app.py
 ```
 
 2. **Access the UI:**
-   * Open `http://localhost:31347` in your browser
+   * Open `http://localhost:31337` in your browser
 
 3. **Interact with the LMs:**
    * Enter your prompt in "Input Message" textbox
