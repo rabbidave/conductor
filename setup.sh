@@ -31,18 +31,10 @@ log_error() {
     exit 1
 }
 
-# Function to check if a command exists
-check_command() {
-    if ! command -v $1 &> /dev/null; then
-        log_error "$1 is required but not installed."
-    fi
-}
-
 # Check required commands
 log_step "Checking prerequisites..."
-check_command python3 && log_success "Python3 found"
-check_command git && log_success "Git found"
-check_command curl && log_success "Curl found"
+command -v python3 >/dev/null 2>&1 && log_success "Python3 found" || log_error "Python3 is required"
+command -v git >/dev/null 2>&1 && log_success "Git found" || log_error "Git is required"
 
 # Default values using OpenAI endpoint and models
 MODEL_A_URL=${1:-"https://api.openai.com/v1"}
@@ -64,7 +56,7 @@ log_success "Created temporary directory: $TEMP_DIR"
 
 # Clone the repository
 log_step "Cloning conductor repository..."
-git clone https://github.com/rabbidave/conductor.git > /dev/null 2>&1 &
+git clone -q https://github.com/rabbidave/conductor.git > /dev/null 2>&1 &
 spinner $!
 if [ $? -eq 0 ]; then
     log_success "Repository cloned successfully"
@@ -89,26 +81,10 @@ OPENAI_API_KEY="$DEFAULT_API_KEY"
 EOF
 log_success "Environment configuration created"
 
-# Set up Python virtual environment and install dependencies
-log_step "Setting up Python virtual environment..."
-python3 -m venv .venv
-source .venv/bin/activate || . .venv/bin/activate || log_error "Failed to activate virtual environment"
-log_success "Virtual environment activated"
-
-log_step "Installing Python dependencies..."
-pip install --upgrade pip > /dev/null 2>&1
-pip install gradio openai GitPython > /dev/null 2>&1 &
-spinner $!
-if [ $? -eq 0 ]; then
-    log_success "Dependencies installed successfully"
-else
-    log_error "Failed to install dependencies"
-fi
-
 # Launch the application
 log_step "Launching Conductor..."
 echo -e "\033[1;33mConductor will start on http://localhost:31337\033[0m"
-python app.py
+python3 app.py
 
 # Cleanup on script exit
 trap 'log_step "Cleaning up..."; rm -rf "$TEMP_DIR"; log_success "Cleanup complete"' EXIT
