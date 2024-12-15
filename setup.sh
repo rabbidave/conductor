@@ -1,23 +1,48 @@
 #!/bin/bash
 
-# Function to log steps with clear formatting
+# Function for spinner animation
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    while ps -p $pid > /dev/null; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+}
+
+# Function to log steps with clear formatting and timestamp
 log_step() {
-    echo -e "\n🚂 \033[1;34m$1\033[0m"
+    echo -e "\n🚂 $(date '+%H:%M:%S') \033[1;34m$1\033[0m"
+}
+
+# Function to log success
+log_success() {
+    echo -e "✅ $(date '+%H:%M:%S') \033[1;32m$1\033[0m"
+}
+
+# Function to log error and exit
+log_error() {
+    echo -e "❌ $(date '+%H:%M:%S') \033[1;31mError: $1\033[0m"
+    exit 1
 }
 
 # Function to check if a command exists
 check_command() {
     if ! command -v $1 &> /dev/null; then
-        echo "❌ Error: $1 is required but not installed."
-        exit 1
+        log_error "$1 is required but not installed."
     fi
 }
 
 # Check required commands
 log_step "Checking prerequisites..."
-check_command python3
-check_command git
-check_command curl
+check_command python3 && log_success "Python3 found"
+check_command git && log_success "Git found"
+check_command curl && log_success "Curl found"
 
 # Default values using OpenAI endpoint and models
 MODEL_A_URL=${1:-"https://api.openai.com/v1"}
@@ -33,13 +58,20 @@ DEFAULT_API_KEY="sk-proj-EM4flmDCm-FLDzPRHyLjzIlHlXHRK31VFoOYjFywQkTKzv3EYh5AmM8
 
 # Create temporary directory
 log_step "Creating temporary directory..."
-TEMP_DIR=$(mktemp -d)
-cd "$TEMP_DIR"
+TEMP_DIR=$(mktemp -d) || log_error "Failed to create temporary directory"
+cd "$TEMP_DIR" || log_error "Failed to change to temporary directory"
+log_success "Created temporary directory: $TEMP_DIR"
 
 # Clone the repository
 log_step "Cloning conductor repository..."
-git clone https://github.com/rabbidave/conductor.git
-cd conductor
+git clone https://github.com/rabbidave/conductor.git > /dev/null 2>&1 &
+spinner $!
+if [ $? -eq 0 ]; then
+    log_success "Repository cloned successfully"
+else
+    log_error "Failed to clone repository"
+fi
+cd conductor || log_error "Failed to change to conductor directory"
 
 # Create .env file
 log_step "Creating .env file..."
@@ -55,10 +87,12 @@ TEMPERATURE="$TEMPERATURE"
 TOP_P="$TOP_P"
 OPENAI_API_KEY="$DEFAULT_API_KEY"
 EOF
+log_success "Environment configuration created"
 
 # Launch the application
 log_step "Launching Conductor..."
+echo -e "\033[1;33mConductor will start on http://localhost:31337\033[0m"
 python3 app.py
 
 # Cleanup on script exit
-trap 'rm -rf "$TEMP_DIR"' EXIT
+trap 'log_step "Cleaning up..."; rm -rf "$TEMP_DIR"; log_success "Cleanup complete"' EXIT
