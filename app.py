@@ -301,20 +301,36 @@ class SecurityError(Exception):
     pass
 
 class LLMManager:
-    def __init__(self, execution_manager, model_a_url=None, model_b_url=None, model_a_alias="model_a", model_b_alias="model_b", model_a_id=None, model_b_id=None, max_tokens=2000, temperature=0.7, top_p=0.95):
+    def __init__(self, execution_manager, 
+                 model_a_url=None, 
+                 model_b_url=None, 
+                 model_a_alias="model_a", 
+                 model_b_alias="model_b", 
+                 model_a_id=None, 
+                 model_b_id=None, 
+                 max_tokens=2000, 
+                 temperature=0.7, 
+                 top_p=0.95, 
+                 api_key=None):
         logger.info("Initializing LLMManager...")
         self.execution_manager = execution_manager
         self.security_manager = execution_manager.security_manager
 
         # Initialize LLM URLs and IDs from environment variables or defaults
         self.model_urls = {
-            model_a_alias: model_a_url or os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/"),
-            model_b_alias: model_b_url or os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
+            model_a_alias: model_a_url or os.getenv("MODEL_A_URL", "https://api.openai.com/v1"),
+            model_b_alias: model_b_url or os.getenv("MODEL_B_URL", "https://api.openai.com/v1")
         }
         self.model_ids = {
-            model_a_alias: model_a_id or os.getenv("MODEL_A_ID", "phi-4"),
-            model_b_alias: model_b_id or os.getenv("MODEL_B_ID", "phi-4")
+            model_a_alias: model_a_id or os.getenv("MODEL_A_ID", "gpt-4"),
+            model_b_alias: model_b_id or os.getenv("MODEL_B_ID", "gpt-4")
         }
+        
+        # Set API key from parameter or environment
+        self.api_key = api_key if api_key else os.getenv("OPENAI_API_KEY", "")
+        if not self.api_key:
+            logger.warning("No API key provided. Please set API key in the configuration.")
+        
         self.model_a_alias = model_a_alias
         self.model_b_alias = model_b_alias
 
@@ -371,18 +387,26 @@ assert add(-1, 1) == 0, "Should handle negatives"
         """Updates the api clients with the current config"""
         try:
             self.llama_api_clients = {}
+            # Update the environment variable for OpenAI
+            os.environ["OPENAI_API_KEY"] = self.api_key
+            
             for alias, url in self.model_urls.items():
                 self.llama_api_clients[alias] = OpenAI(
-                    api_key="api_key",
+                    api_key=os.getenv("OPENAI_API_KEY"),
                     base_url=url
                 )
+                logger.info(f"Initialized API client for {alias} with URL {url}")
         except Exception as e:
             logger.error(f"Failed to initialize LLMManager: {e}")
             raise
 
     def update_config(self, model_a_url=None, model_b_url=None, model_a_alias=None, model_b_alias=None,
-                     model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None):
+                     model_a_id=None, model_b_id=None, max_tokens=None, temperature=None, top_p=None, api_key=None):
         """Updates the config of the LLM Manager"""
+        if api_key:
+            self.api_key = api_key
+            logger.info("API key updated")
+            
         if model_a_url and model_a_alias:
             self.model_urls[model_a_alias] = model_a_url
         if model_b_url and model_b_alias:
@@ -686,7 +710,7 @@ def create_ui():
         
         # Initialize LLMManager with environment variables
         model_a_url = os.getenv("MODEL_A_URL", "http://127.0.0.1:1234/v1/")
-        model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1235/v1/")
+        model_b_url = os.getenv("MODEL_B_URL", "http://127.0.0.1:1234/v1/")
         model_a_id = os.getenv("MODEL_A_ID", "phi-4")
         model_b_id = os.getenv("MODEL_B_ID", "phi-4")
         model_a_alias = "model_a"
@@ -694,8 +718,10 @@ def create_ui():
         max_tokens = os.getenv("MAX_TOKENS", "2000")
         temperature = os.getenv("TEMPERATURE", "0.7")
         top_p = os.getenv("TOP_P", "0.95")
+        api_key = os.getenv("API_KEY", "api_key")
 
         manager = LLMManager(execution_manager,
+                           api_key=api_key,
                            model_a_url=model_a_url,
                            model_b_url=model_b_url,
                            model_a_alias=model_a_alias,
@@ -706,12 +732,79 @@ def create_ui():
                            temperature=float(temperature),
                            top_p=float(top_p))
 
+        def handle_update_env(model_a_url, model_b_url, model_a_id, model_b_id, 
+                            model_a_alias, model_b_alias, max_tokens, temperature, top_p, api_key):
+            """Handle the update of env variables"""
+            try:
+                manager.update_config(
+                    model_a_url=model_a_url,
+                    model_b_url=model_b_url,
+                    model_a_id=model_a_id,
+                    model_b_id=model_b_id,
+                    model_a_alias=model_a_alias,
+                    model_b_alias=model_b_alias,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                    api_key=api_key
+                )
+                return (f"Configuration updated successfully. API key {'was' if api_key else 'was not'} updated. "
+                       f"URLS: {manager.model_urls}, IDs: {manager.model_ids}, "
+                       f"Aliases: {model_a_alias}/{model_b_alias}, "
+                       f"Params: tokens={max_tokens}, temp={temperature}, top_p={top_p}"
+                       ), model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p, api_key
+
+            except Exception as e:
+                error_msg = f"Error updating configuration: {str(e)}"
+                logger.error(error_msg)
+                return error_msg, model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p, api_key
+
+        def handle_submit(message):
+            """Handle message submission with streaming."""
+            if not message:
+                return "", "Please enter a message", "", ""
+
+            try:
+                logger.info(f"Handling new message: {message[:50]}...")
+                result = manager.process_message(message)
+                
+                for response in result:
+                    yield response
+
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                yield "", f"Error: {e}", execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
+
+        def handle_stop():
+            """Handle stop button click."""
+            return "Stopping generation...", "Stopping..."
+
+        def handle_clear():
+            """Handle conversation clearing."""
+            try:
+                result = manager.clear_conversation()
+                return "", result, "<p>No code executed yet.</p>", "<p>No output yet.</p>"
+            except Exception as e:
+                error_msg = f"Error clearing conversation: {str(e)}"
+                logger.error(error_msg)
+                return "", error_msg, execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
+
+        def handle_show_last_code():
+            """Handle show last code button click."""
+            logger.info("handle_show_last_code called")
+            return execution_manager.get_last_code_html()
+
+        def handle_show_last_output():
+            """Handle show last output button click."""
+            logger.info("handle_show_last_output called")
+            return execution_manager.get_last_output_html()
+
         with gr.Blocks(title="🚂🤖🪄 Conductor") as interface:
             gr.Markdown("# 🚂🤖🪄 Conductor")
             gr.Markdown("Enter your message to interact with the AI models. Code blocks are automatically executed, and tests must pass to continue.")
 
             with gr.Accordion("Environment Variables", open=False):
-               with gr.Row():
+                with gr.Row():
                     model_a_url_input = gr.Textbox(
                         label="Model A URL",
                         value=model_a_url,
@@ -720,9 +813,9 @@ def create_ui():
                     model_b_url_input = gr.Textbox(
                         label="Model B URL",
                         value=model_b_url,
-                        placeholder="http://127.0.0.1:1235/v1/"
+                        placeholder="http://127.0.0.1:1234/v1/"
                     )
-               with gr.Row():
+                with gr.Row():
                     model_a_id_input = gr.Textbox(
                         label="Model A ID",
                         value=model_a_id,
@@ -733,7 +826,7 @@ def create_ui():
                         value=model_b_id,
                         placeholder="phi-4"
                     )
-               with gr.Row():
+                with gr.Row():
                     model_a_alias_input = gr.Textbox(
                         label="Model A Alias",
                         value=model_a_alias,
@@ -744,7 +837,7 @@ def create_ui():
                         value=model_b_alias,
                         placeholder="model_b"
                     )
-               with gr.Row():
+                with gr.Row():
                     max_tokens_input = gr.Number(
                         label="Max Tokens",
                         value=int(max_tokens),
@@ -757,7 +850,12 @@ def create_ui():
                         label="Top P",
                         value=float(top_p),
                     )
-               update_env_btn = gr.Button("Update Configuration")
+                    api_key_input = gr.Textbox(
+                        label="API Key",
+                        value=api_key,
+                        type="password"
+                    )
+                update_env_btn = gr.Button("Update Configuration")
 
             with gr.Row():
                 with gr.Column(scale=2):
@@ -798,75 +896,15 @@ def create_ui():
                 visible=True
             )
 
-            def handle_update_env(model_a_url, model_b_url, model_a_id, model_b_id, 
-                                model_a_alias, model_b_alias, max_tokens, temperature, top_p):
-                """Handle the update of env variables"""
-                try:
-                    manager.update_config(
-                        model_a_url=model_a_url,
-                        model_b_url=model_b_url,
-                        model_a_id=model_a_id,
-                        model_b_id=model_b_id,
-                        model_a_alias=model_a_alias,
-                        model_b_alias=model_b_alias,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=top_p
-                    )
-                    return (f"Configuration updated. MODEL_URLS: {manager.model_urls}, MODEL_IDS: {manager.model_ids} "
-                           f"MODEL_A_ALIAS: {model_a_alias}, MODEL_B_ALIAS: {model_b_alias}, "
-                           f"MAX_TOKENS: {max_tokens}, TEMPERATURE: {temperature}, TOP_P: {top_p}"
-                           ), model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
-                except Exception as e:
-                    return f"Error updating configuration: {e}", model_a_url, model_b_url, model_a_id, model_b_id, model_a_alias, model_b_alias, max_tokens, temperature, top_p
-
-            def handle_submit(message):
-                """Handle message submission with streaming."""
-                if not message:
-                    return "", "Please enter a message", "", ""
-
-                try:
-                    logger.info(f"Handling new message: {message[:50]}...")
-                    result = manager.process_message(message)
-                    
-                    for response in result:
-                        yield response
-
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-                    yield "", f"Error: {e}", execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
-
-            def handle_stop():
-                """Handle stop button click."""
-                return "Stopping generation...", "Stopping..."
-
-            def handle_clear():
-                """Handle conversation clearing."""
-                try:
-                    result = manager.clear_conversation()
-                    return "", result, "<p>No code executed yet.</p>", "<p>No output yet.</p>"
-                except Exception as e:
-                    error_msg = f"Error clearing conversation: {str(e)}"
-                    logger.error(error_msg)
-                    return "", error_msg, execution_manager.get_last_code_html(), execution_manager.get_last_output_html()
-
-            def handle_show_last_code():
-                """Handle show last code button click."""
-                logger.info("handle_show_last_code called")
-                return execution_manager.get_last_code_html()
-
-            def handle_show_last_output():
-                """Handle show last output button click."""
-                logger.info("handle_show_last_output called")
-                return execution_manager.get_last_output_html()
-
             # Wire up the interface events
             update_env_btn.click(
                 fn=handle_update_env,
                 inputs=[model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input,
-                       model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input],
-                outputs=[status_display, model_a_url_input, model_b_url_input, model_a_id_input, model_b_id_input,
-                        model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, top_p_input]
+                       model_a_alias_input, model_b_alias_input, max_tokens_input, temperature_input, 
+                       top_p_input, api_key_input],
+                outputs=[status_display, model_a_url_input, model_b_url_input, model_a_id_input, 
+                        model_b_id_input, model_a_alias_input, model_b_alias_input, max_tokens_input, 
+                        temperature_input, top_p_input]
             )
 
             submit_btn.click(
@@ -928,7 +966,7 @@ def main():
         interface.launch(
             share=False,
             server_name="0.0.0.0",
-            server_port=31347,
+            server_port=31337,
             debug=True
         )
 
