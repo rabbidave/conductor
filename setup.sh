@@ -89,10 +89,26 @@ OPENAI_API_KEY="$DEFAULT_API_KEY"
 EOF
 log_success "Environment configuration created"
 
+# Set up Python virtual environment and install dependencies
+log_step "Setting up Python virtual environment..."
+python3 -m venv .venv
+source .venv/bin/activate || . .venv/bin/activate || log_error "Failed to activate virtual environment"
+log_success "Virtual environment activated"
+
+log_step "Installing Python dependencies..."
+pip install --upgrade pip > /dev/null 2>&1
+pip install gradio openai GitPython > /dev/null 2>&1 &
+spinner $!
+if [ $? -eq 0 ]; then
+    log_success "Dependencies installed successfully"
+else
+    log_error "Failed to install dependencies"
+fi
+
 # Launch the application
 log_step "Launching Conductor..."
 echo -e "\033[1;33mConductor will start on http://localhost:31337\033[0m"
-python3 app.py
+python app.py
 
 # Cleanup on script exit
 trap 'log_step "Cleaning up..."; rm -rf "$TEMP_DIR"; log_success "Cleanup complete"' EXIT
