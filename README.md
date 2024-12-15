@@ -80,7 +80,7 @@ python app.py
 ```
 
 2. **Access the UI:**
-   * Open `http://localhost:31340` in your browser
+   * Open `http://localhost:31347` in your browser
 
 3. **Interact with the LMs:**
    * Enter your prompt in "Input Message" textbox
