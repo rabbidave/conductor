@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Function for spinner animation
 spinner() {
     local pid=$1
@@ -31,28 +30,41 @@ log_error() {
     exit 1
 }
 
-# Function to check if a command exists
-check_command() {
-    if ! command -v $1 &> /dev/null; then
-        log_error "$1 is required but not installed."
+# Find Python command (python3 or python)
+find_python_cmd() {
+    if command -v python3 &> /dev/null; then
+        echo "python3"
+        return
+    elif command -v python &> /dev/null; then
+        # Check if Python version is 3.x
+        if python -c "import sys; assert sys.version_info[0]==3" &> /dev/null; then
+            echo "python"
+            return
+        fi
     fi
+    log_error "Python 3 is required but not installed."
 }
-
 
 # Check required commands
 log_step "Checking prerequisites..."
-check_command python3 && log_success "Python3 found"
-if ! command -v pip3 &> /dev/null ; then
-    check_command python && log_success "python command found"
-    pip_command="python3 -m pip"
+
+# Find Python command
+PYTHON_CMD=$(find_python_cmd)
+log_success "${PYTHON_CMD} found"
+
+# Find pip command
+if command -v pip3 &> /dev/null; then
+    PIP_CMD="pip3"
+elif command -v pip &> /dev/null; then
+    PIP_CMD="pip"
 else
-    pip_command="pip3"
-    log_success "pip3 command found"
+    PIP_CMD="${PYTHON_CMD} -m pip"
 fi
+log_success "${PIP_CMD} command found"
 
 # Start the application
 log_step "Starting the application..."
-python3 app.py &
+${PYTHON_CMD} app.py &
 app_pid=$!
 spinner $app_pid
 
