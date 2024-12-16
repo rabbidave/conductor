@@ -1,142 +1,111 @@
 #!/bin/bash
+
+# Enable error handling
 set -e
 
-echo "🚂 Conductor Installation Script"
-echo "-------------------------------"
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# Detect OS
-OS="unknown"
-case "$(uname -s)" in
-    Linux*)     OS="linux";;
-    Darwin*)    OS="mac";;
-    MINGW*|MSYS*|CYGWIN*) OS="windows";;
-esac
+# Function to print status messages
+log() {
+    echo -e "${GREEN}[+]${NC} $1"
+}
 
-# Function to check if running with admin/sudo privileges
-check_privileges() {
-    if [ "$OS" = "windows" ]; then
-        # Check if running as Administrator in Windows
-        net session >/dev/null 2>&1
-        if [ $? -ne 0 ]; then
-            echo "Error: Please run this script with administrator privileges"
-            echo "Right-click on PowerShell and select 'Run as administrator'"
-            exit 1
-        fi
+error() {
+    echo -e "${RED}[!]${NC} $1"
+}
+
+warn() {
+    echo -e "${YELLOW}[*]${NC} $1"
+}
+
+# Function to check Python version
+check_python() {
+    if command -v python3 &>/dev/null; then
+        local python_version=$(python3 --version 2>&1 | cut -d' ' -f2)
+        log "Found Python version: $python_version"
+        return 0
     else
-        # Check if running with sudo on Unix
-        if [ "$EUID" -ne 0 ]; then
-            echo "Error: Please run this script with sudo"
+        warn "Python 3 not found"
+        return 1
+    fi
+}
+
+# Function to install Python based on OS
+install_python() {
+    case "$(uname -s)" in
+        Linux*)
+            if command -v apt-get &>/dev/null; then
+                log "Using apt to install Python..."
+                sudo apt-get update
+                sudo apt-get install -y python3 python3-pip
+            elif command -v yum &>/dev/null; then
+                log "Using yum to install Python..."
+                sudo yum update -y
+                sudo yum install -y python3 python3-pip
+            else
+                error "Unsupported Linux distribution"
+                exit 1
+            fi
+            ;;
+            
+        Darwin*)
+            if command -v brew &>/dev/null; then
+                log "Using Homebrew to install Python..."
+                brew install python
+            else
+                log "Installing Homebrew first..."
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                brew install python
+            fi
+            ;;
+            
+        MINGW*|MSYS*|CYGWIN*)
+            error "For Windows, please install Python 3.11 from python.org"
+            error "Download URL: https://www.python.org/downloads/"
             exit 1
-        fi
-    fi
-}
-
-# Windows-specific installation
-install_windows() {
-    echo "Detected Windows OS"
-    
-    # Download and run PowerShell script
-    cat > install.ps1 << 'EOF'
-$ErrorActionPreference = "Stop"
-Write-Host "Installing Python for Windows..."
-
-# Check if Python is already installed
-$pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-if ($pythonCommand) {
-    Write-Host "Python is already installed at: $($pythonCommand.Source)"
-    Write-Host "Python version: $(python --version)"
-} else {
-    # Download and install Python
-    Write-Host "Downloading Python installer..."
-    $installerUrl = "https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe"
-    $installerPath = "$env:TEMP\python-installer.exe"
-    
-    Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-    Write-Host "Installing Python..."
-    Start-Process -FilePath $installerPath -ArgumentList "/quiet", "InstallAllUsers=1", "PrependPath=1" -Wait
-    Remove-Item $installerPath
-    
-    # Refresh environment variables
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-}
-
-# Clone the repository if git is available
-if (Get-Command git -ErrorAction SilentlyContinue) {
-    Write-Host "Cloning repository..."
-    git clone https://github.com/yourusername/conductor.git
-    Set-Location conductor
-} else {
-    Write-Host "Git not found. Please install git or download the repository manually."
-}
-
-Write-Host "Setup completed! You can now run app.py"
-EOF
-
-    powershell.exe -ExecutionPolicy Bypass -File install.ps1
-}
-
-# Linux installation
-install_linux() {
-    echo "Detected Linux OS"
-    
-    if command -v apt-get &>/dev/null; then
-        # Debian/Ubuntu
-        apt-get update
-        apt-get install -y python3 python3-pip git
-    elif command -v yum &>/dev/null; then
-        # RHEL/CentOS
-        yum update -y
-        yum install -y python3 python3-pip git
-    else
-        echo "Unsupported Linux distribution"
-        exit 1
-    fi
-    
-    # Clone repository
-    git clone https://github.com/yourusername/conductor.git
-    cd conductor
-}
-
-# macOS installation
-install_mac() {
-    echo "Detected macOS"
-    
-    # Install Homebrew if not present
-    if ! command -v brew &>/dev/null; then
-        echo "Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
-    
-    # Install Python and Git
-    brew install python git
-    
-    # Clone repository
-    git clone https://github.com/yourusername/conductor.git
-    cd conductor
-}
-
-# Main installation logic
-main() {
-    check_privileges
-    
-    case "$OS" in
-        "windows")
-            install_windows
             ;;
-        "linux")
-            install_linux
-            ;;
-        "mac")
-            install_mac
-            ;;
+            
         *)
-            echo "Unsupported operating system"
+            error "Unsupported operating system"
             exit 1
             ;;
     esac
+}
+
+# Function to set environment variables
+setup_env() {
+    log "Setting up environment variables..."
+    # Using printf to ensure proper escaping of special characters
+    printf 'export MODEL_A_URL="https://openrouter.ai/api/v1"\n' >> ~/.bashrc
+    printf 'export MODEL_A_ID="google/gemini-2.0-flash-exp:free"\n' >> ~/.bashrc
+    source ~/.bashrc
+}
+
+# Main installation process
+main() {
+    log "Starting Conductor setup..."
     
-    echo "✅ Installation completed!"
-    echo "You can now run: python app.py"
+    # Check if Python is installed
+    if ! check_python; then
+        log "Installing Python..."
+        install_python
+    fi
+    
+    # Verify Python installation
+    if ! check_python; then
+        error "Python installation failed"
+        exit 1
+    fi
+    
+    # Set up environment variables
+    setup_env
+    
+    log "Setup completed successfully!"
+    log "You can now run: python app.py"
 }
 
 # Run main installation
