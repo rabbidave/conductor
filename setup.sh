@@ -1,119 +1,143 @@
-@echo off
-setlocal
-goto :init
-
-:bashscript
 #!/bin/bash
+set -e
+
+echo "🚂 Conductor Installation Script"
+echo "-------------------------------"
 
 # Detect OS
-detect_os() {
-    case "$(uname -s)" in
-        Darwin*)    OS='macos' ;;
-        Linux*)     OS='linux' ;;
-        MINGW*|MSYS*|CYGWIN*) OS='windows' ;;
-        *)          OS='unknown' ;;
-    esac
-    echo "Detected OS: $OS"
+OS="unknown"
+case "$(uname -s)" in
+    Linux*)     OS="linux";;
+    Darwin*)    OS="mac";;
+    MINGW*|MSYS*|CYGWIN*) OS="windows";;
+esac
+
+# Function to check if running with admin/sudo privileges
+check_privileges() {
+    if [ "$OS" = "windows" ]; then
+        # Check if running as Administrator in Windows
+        net session >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Error: Please run this script with administrator privileges"
+            echo "Right-click on PowerShell and select 'Run as administrator'"
+            exit 1
+        fi
+    else
+        # Check if running with sudo on Unix
+        if [ "$EUID" -ne 0 ]; then
+            echo "Error: Please run this script with sudo"
+            exit 1
+        fi
+    fi
 }
 
-# Install Python 3 based on OS
-install_python() {
+# Windows-specific installation
+install_windows() {
+    echo "Detected Windows OS"
+    
+    # Download and run PowerShell script
+    cat > install.ps1 << 'EOF'
+$ErrorActionPreference = "Stop"
+Write-Host "Installing Python for Windows..."
+
+# Check if Python is already installed
+$pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+if ($pythonCommand) {
+    Write-Host "Python is already installed at: $($pythonCommand.Source)"
+    Write-Host "Python version: $(python --version)"
+} else {
+    # Download and install Python
+    Write-Host "Downloading Python installer..."
+    $installerUrl = "https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe"
+    $installerPath = "$env:TEMP\python-installer.exe"
+    
+    Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+    Write-Host "Installing Python..."
+    Start-Process -FilePath $installerPath -ArgumentList "/quiet", "InstallAllUsers=1", "PrependPath=1" -Wait
+    Remove-Item $installerPath
+    
+    # Refresh environment variables
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
+# Clone the repository if git is available
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    Write-Host "Cloning repository..."
+    git clone https://github.com/yourusername/conductor.git
+    Set-Location conductor
+} else {
+    Write-Host "Git not found. Please install git or download the repository manually."
+}
+
+Write-Host "Setup completed! You can now run app.py"
+EOF
+
+    powershell.exe -ExecutionPolicy Bypass -File install.ps1
+}
+
+# Linux installation
+install_linux() {
+    echo "Detected Linux OS"
+    
+    if command -v apt-get &>/dev/null; then
+        # Debian/Ubuntu
+        apt-get update
+        apt-get install -y python3 python3-pip git
+    elif command -v yum &>/dev/null; then
+        # RHEL/CentOS
+        yum update -y
+        yum install -y python3 python3-pip git
+    else
+        echo "Unsupported Linux distribution"
+        exit 1
+    fi
+    
+    # Clone repository
+    git clone https://github.com/yourusername/conductor.git
+    cd conductor
+}
+
+# macOS installation
+install_mac() {
+    echo "Detected macOS"
+    
+    # Install Homebrew if not present
+    if ! command -v brew &>/dev/null; then
+        echo "Installing Homebrew..."
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    
+    # Install Python and Git
+    brew install python git
+    
+    # Clone repository
+    git clone https://github.com/yourusername/conductor.git
+    cd conductor
+}
+
+# Main installation logic
+main() {
+    check_privileges
+    
     case "$OS" in
-        "macos")
-            if command -v brew &> /dev/null; then
-                brew install python
-            else
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                brew install python
-            fi
+        "windows")
+            install_windows
             ;;
         "linux")
-            if command -v apt-get &> /dev/null; then
-                sudo apt-get update
-                sudo apt-get install -y python3
-            elif command -v yum &> /dev/null; then
-                sudo yum update
-                sudo yum install -y python3
-            elif command -v pacman &> /dev/null; then
-                sudo pacman -Sy python
-            else
-                echo "Unable to determine package manager. Please install Python 3 manually."
-                exit 1
-            fi
+            install_linux
             ;;
-        "windows")
-            echo "Downloading Python installer..."
-            curl -o python-installer.exe https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe
-            ./python-installer.exe /quiet InstallAllUsers=1 PrependPath=1
-            rm python-installer.exe
+        "mac")
+            install_mac
             ;;
         *)
             echo "Unsupported operating system"
             exit 1
             ;;
     esac
+    
+    echo "✅ Installation completed!"
+    echo "You can now run: python app.py"
 }
 
-# Main bash script
-if ! command -v python3 &> /dev/null; then
-    echo "Python 3 not found. Installing..."
-    detect_os
-    install_python
-fi
-
-export MODEL_A_URL="https://openrouter.ai/api/v1"
-export MODEL_A_ID="google/gemini-2.0-flash-exp:free"
-python3 app.py
-exit $?
-
-:init
-setlocal enabledelayedexpansion
-set "PATH=%PATH%;%SYSTEMROOT%\System32"
-
-:: Detect if running in PowerShell
-powershell /? >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    goto :powershell
-) else (
-    goto :batch
-)
-
-:powershell
-powershell -Command "& {
-    # Check for Python
-    if (!(Get-Command python -ErrorAction SilentlyContinue)) {
-        Write-Host 'Python not found. Installing...'
-        $url = 'https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe'
-        $output = 'python-installer.exe'
-        Invoke-WebRequest -Uri $url -OutFile $output
-        Start-Process -FilePath $output -ArgumentList '/quiet', 'InstallAllUsers=1', 'PrependPath=1' -Wait
-        Remove-Item $output
-        refreshenv
-    }
-
-    # Set environment variables
-    $env:MODEL_A_URL = 'https://openrouter.ai/api/v1'
-    $env:MODEL_A_ID = 'google/gemini-2.0-flash-exp:free'
-
-    # Run Python script
-    python app.py
-}"
-exit /b
-
-:batch
-:: Check for Python
-python --version >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo Python not found. Installing...
-    curl -o python-installer.exe https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe
-    python-installer.exe /quiet InstallAllUsers=1 PrependPath=1
-    del python-installer.exe
-)
-
-:: Set environment variables
-set MODEL_A_URL=https://openrouter.ai/api/v1
-set MODEL_A_ID=google/gemini-2.0-flash-exp:free
-
-:: Run Python script
-python app.py
-exit /b
+# Run main installation
+main
