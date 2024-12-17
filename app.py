@@ -46,40 +46,6 @@ logging.basicConfig(
 
 logger = logging.getLogger("LLMInterface")
 
-def setup_venv():
-    """Create and activate virtual environment."""
-    logger.info("Setting up virtual environment...")
-
-    venv_dir = Path(".venv")
-    if not venv_dir.exists():
-        logger.info("Creating new virtual environment...")
-        venv.create(venv_dir, with_pip=True)
-
-    if sys.platform == "win32":
-        python_path = venv_dir / "Scripts" / "python.exe"
-        pip_path = venv_dir / "Scripts" / "pip.exe"
-    else:
-        python_path = venv_dir / "bin" / "python"
-        pip_path = venv_dir / "bin" / "pip"
-
-    # Install required packages
-    try:
-        logger.info("Installing required packages...")
-        subprocess.check_call([str(pip_path), "install", "gradio", "openai", "GitPython"])
-        logger.info("Package installation successful")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to install packages: {e}")
-        raise
-
-    return str(python_path)
-
-def restart_in_venv():
-    """Ensure running in virtual environment."""
-    if not hasattr(sys, 'real_prefix') and not sys.base_prefix != sys.prefix:
-        logger.info("Not running in venv, setting up and restarting...")
-        python_path = setup_venv()
-        os.execv(python_path, [python_path] + sys.argv)
-
 class ExecutionManager:
     """Manages code execution and diffs."""
 
@@ -957,8 +923,6 @@ def main():
     logger.info("🚂🤖🪄 Initializing Conductor")
 
     try:
-        # Ensure we're running in a virtual environment
-        restart_in_venv()
 
         # Create and launch the interface
         interface = create_ui()
