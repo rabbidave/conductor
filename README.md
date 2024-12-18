@@ -5,75 +5,32 @@
 * Deployable interface (GUI/API) that (locally) orchestrates multiple (remote and/or local) Language Models.
 * Python code is executed and tested against assertions; via configurable allow/block list of operations (regex).
 
+Try it yourself:
+
+```bash
+sudo apt-get update && sudo apt-get install -y git python3 python3-venv && python3 -m venv conductor_venv && source conductor_venv/bin/activate && pip3 install gradio openai GitPython && git clone https://github.com/rabbidave/conductor.git && cd conductor && python3 app.py
+```
+
 ![](https://github.com/rabbidave/conductor/blob/main/envvar.gif?raw=true)
 
 ## Features
 
 * **Multi LM Interaction:** Engage with multiple LMs sequentially for mob-style programming; w/ configurable exit criteria
-* **Simplified Code Execution:** Just use standard Markdown code blocks with language specifiers (```python for code, ```python-test for tests)
-* **Automated Test Assertions:** Tests are automatically detected and executed from code blocks marked as ```python-test
-* **Test-Driven Generation:** Generation stops after a configurable number of successful test passes, encouraging test-driven development
-* **Configurable Model IDs, API URLs, and Generation Parameters:** Easily switch between different LMs and Generation Settings
+* **Localized Code Execution:** Deploy wherever you want code executed via blocks with language specifiers e.g. ```python
+* **Automated Test Execution:** Tests are automatically detected and executed from code blocks e.g. ```python-test
+* **Test-Driven Generation:** Generation stops after a configurable number of successful tests and criteria have passed
+* **Configurable IDs, APIs, and Parameters:** Easily switch between different URLs/LMs and Generation Settings
 * **Dynamic Environment Configuration:** Modify model IDs, API URLs, maximum tokens, temperature, and top-p via the UI or `.env` file
-* **Detailed Logging:** Comprehensive logs available in the `logs/` directory for debugging
+* **Detailed Logging:** Comprehensive and configurable logs available in the `logs/` directory for debugging
 * **Model Aliases:** Model Aliases allow you to set up the interaction with two distinct models or two instances of the same model
 
 ## Prerequisites
 
 * **Python 3.7+:** Ensure you have Python 3.7 or a newer version installed
-* **LM Studio (or similar):** A local LLM server like LM Studio is required. You can download it from [LM Studio's website](https://lmstudio.ai/)
-
-## Installation
-
-1. **Clone the Repository:**
-```bash
-git clone https://github.com/rabbidave/conductor
-cd conductor
-```
-
-2. **Install Dependencies:**
-```bash
-pip install -r requirements.txt
-```
-
-## Configuration
-
-1. **LM Studio Setup:**
-   * Launch LM Studio
-   * Download and load the models you want to use
-   * Start the local server in LM Studio (default: `http://localhost:1234`)
-
-2. **Environment Variables:**
-   * On first use, an `.env` file will be created with default values
-   * Update the following variables:
-     * `MODEL_A_ID`: Model ID for first LLM instance
-     * `MODEL_B_ID`: Model ID for second LLM instance
-     * `MODEL_A_URL`: API URL for Model A
-     * `MODEL_B_URL`: API URL for Model B
-     * `MAX_TOKENS`: Maximum tokens to generate
-     * `TEMPERATURE`: Sampling temperature
-     * `TOP_P`: Top-p value for nucleus sampling
-
-Example `.env` file:
-```
-MODEL_A_ID="your-model-a-id"
-MODEL_B_ID="your-model-b-id"
-MODEL_A_URL="http://localhost:1234/v1/"
-MODEL_B_URL="http://localhost:1234/v1/"
-MAX_TOKENS="2000"
-TEMPERATURE="0.7"
-TOP_P="0.95"
-```
-
-3. **UI-Based Configuration:**
-   * Environment variables can be modified directly in the Conductor UI
-   * Expand "Environment Variables" accordion
-   * Enter values and click "Update Environment Variables"
-   * Note: Changes require application restart to take full effect
 
 ## Usage
 
-1. **Start the Interface:**
+1. **Install Dependencies (gradio, openai, GitPython) & Start the Interface:**
 ```bash
 python app.py
 ```
