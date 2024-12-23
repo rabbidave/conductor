@@ -1,0 +1,23 @@
+{
+  "title": "Conductor",
+  "description": "A GPT-powered automation framework",
+  "icon": "🎵",
+  "menu": [{
+    "html": "Install",
+    "href": "install.json"
+  }, {
+    "html": "Start",
+    "href": "start.json"
+  }],
+  "run": [{
+    "method": "shell.run",
+    "params": {
+      "message": [
+        "python3 -m venv conductor_venv",
+        "source conductor_venv/bin/activate",
+        "pip3 install -r requirements.txt",
+        "python3 app.py"
+      ]
+    }
+  }]
+}
