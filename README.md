@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 * Deployable interface (GUI/API) that (locally) orchestrates multiple (remote and/or local) Language Models.
-* Python code is executed and tested against assertions; via configurable allow/block list of operations (regex).
+* Python code is executed and tested against assertions after validation by the configurable SecurityManager class
 
 Try it yourself:
 
