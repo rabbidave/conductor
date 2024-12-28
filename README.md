@@ -5,10 +5,17 @@
 * Deployable interface (GUI/API) that (locally) orchestrates multiple (remote and/or local) Language Models.
 * Python code is executed and tested against assertions after validation by the configurable SecurityManager class
 
-Try it yourself:
+Try it yourself in *nix or WSL:
 
 ```bash
-sudo apt-get update && sudo apt-get install -y git python3 python3-venv && python3 -m venv conductor_venv && source conductor_venv/bin/activate && pip3 install gradio openai GitPython && git clone https://github.com/rabbidave/conductor.git && cd conductor && python3 app.py
+sudo apt-get update && sudo apt-get install -y git python3 python3-venv && \ # Authenticates User
+if [ ! -d "conductor_venv" ]; then python3 -m venv conductor_venv; fi && \ 
+
+source conductor_venv/bin/activate && \
+pip install --upgrade pip gradio openai GitPython && \ # Localizes Dependencies
+
+if [ -d "conductor" ]; then (cd conductor && git pull); else git clone https://github.com/rabbidave/conductor.git; fi && \
+cd conductor && python app.py # Localizes Application
 ```
 
 ![](https://github.com/rabbidave/conductor/blob/main/envvar.gif?raw=true)
@@ -30,7 +37,7 @@ sudo apt-get update && sudo apt-get install -y git python3 python3-venv && pytho
 
 ## Usage
 
-1. **Install Dependencies (gradio, openai, GitPython) & Start the Interface:**
+1. **Run the App**
 ```bash
 python app.py
 ```
@@ -41,9 +48,7 @@ python app.py
 3. **Interact with the LMs:**
    * Enter your prompt in "Input Message" textbox
    * Code blocks are automatically executed:
-     * ```python for regular code
-     * ```python-test for test assertions
-   * Tests must pass for generation to complete
+   * Generation continues until n-tests completed
    * Use "Stop Generation" to halt manually
    * Use "Clear Conversation" to start fresh
    * "Show Last Code" and "Show Last Output" display recent executions
