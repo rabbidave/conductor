@@ -15,7 +15,7 @@ source conductor_venv/bin/activate && \
 pip install --upgrade pip gradio openai GitPython && \ # Localizes Dependencies
 
 if [ -d "conductor" ]; then (cd conductor && git pull); else git clone https://github.com/rabbidave/conductor.git; fi && \
-cd conductor && python app.py # Localizes Application
+cd conductor && python app.py
 ```
 
 ![](https://github.com/rabbidave/conductor/blob/main/envvar.gif?raw=true)
